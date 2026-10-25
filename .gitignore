@@ -22,3 +22,6 @@ local.properties
 /tools/
 *.keystore
 *.jks
+
+# 本地 AI 协作规则，不随仓库发布
+AGENTS.md
