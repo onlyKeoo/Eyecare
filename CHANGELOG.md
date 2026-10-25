@@ -1,0 +1,505 @@
+# 更新日志 · Changelog
+
+本文件是「护眼时光 / EyeCare」的**完整开发记录**：每个版本做了什么、为什么这么做、踩过哪些坑，都归档在这里。
+
+README 只保留精简版的版本历史与更新日志简表；需要追溯细节时看这里。
+
+> 所有 APK 均为 debug 构建，产物存放于设备 `/sdcard/Download/`。版本号格式 `vMAJOR.MINOR.PATCH`。
+
+---
+
+## APK 记录
+
+| 版本 | versionCode | APK MD5 |
+|---|---|---|
+| v2.3.1 | 15 | `658b931601b5ccf9bb5a413c34f4a77a` |
+| v2.3.2 | 16 | `6e5b65c7546b16db5421594ebed7dd5e` |
+| v2.3.3 | 17 | `1558f76f0e054f9339166b574e0abd53` |
+| v2.3.4 | 18 | `694b8639b6b9a171babd90a9f09efc20` |
+| v2.3.5 | 19 | `45eec9b41a21d6f9ef668d84ee142071`（11,948,795 字节） |
+| v2.3.6 | 20 | `1a6ba6cc728714c9541fcebbf61d1a6e`（11,979,405 字节） |
+| v2.3.7 | 21 | `161f056758210493244de8902048656c`（11,964,907 字节） |
+| v2.3.8 | 22 | `df9117b4bf73902745abdb11369b2b34`（11,964,943 字节） |
+| v2.3.9 | 23 | `2b3eb122cf6a2d0a9ee8f54f6eef16fe`（11,964,943 字节） |
+| v2.3.10 | 24 | `cb8c1f0bb17f1d8e9750a05f5fcdf4dd`（11,964,931 字节） |
+| v2.3.11 | 25 | `53a83e5e82eb3f87c0739f19a6540f9b`（11,972,111 字节） |
+| v2.3.12 | 26 | `1e5c6ba3e48290c67d6842c78247bbe8`（12,013,354 字节，debug） |
+| v2.3.13 | 27 | `fbd5f22bbfc9d99557414df718c56206`（12,029,742 字节，debug） |
+| v2.3.14 | 28 | `01ab98d6879b622a89eba03059976713`（12,029,738 字节，debug） |
+| v2.3.15 | 29 | `4ab377a275c93b705e6fb634dc563bd7`（12,062,506 字节，debug） |
+| v2.4.0 | 30 | `c937b2ec574a61d486440f15e1166780`（8,131,039 字节，release 已签名） |
+| v2.4.1 | 31 | 横轴乱码临时修复版（未单独归档） |
+| v2.4.2 | 32 | `9b70603091d9272f1e1df716a0b9ad17`（8,147,727 字节，release 已签名） |
+| v2.4.3 | 33 | `8c9b1226b32e47826e4958e96d2e5596`（8,147,731 字节，release 已签名） |
+| v2.6.11 | 34 | `1a019c962f046fc9c01ac24abb54db95`（8,164,467 字节，release 已签名） |
+| **v2.7.1** | 36 | `6f561e3e7c2c379e77a815fd11fd2bbd`（8,180,883 字节，release 已签名） |
+| v2.7.0 | 35 | —（未单独发布安装包，改动并入 v2.7.1） |
+
+---
+
+## v2.6.11 改动摘要
+
+### 修复「用眼时长统计不实」（虚高与漏记并存）
+
+**现象**：报告页的用眼时长与系统「屏幕使用时间」对不上，且**两个方向都出现过**——先是记录虚高（屏幕实际亮 ~2 小时，应用记成 ~6 小时），修完又出现漏记（实际用眼 1 小时只记到 36 分钟）。
+
+**根因**：结算用「本次会话累计值」直接当增量写入统计，没有「已结算到哪里」的记忆。
+
+- `workAccumMs` 是**段内累计**，每次结算都把整段累计值当成新增时长再记一遍 → 同一段时长被反复累加，**时长翻倍**。
+- 补上去重水位线后出现反向问题：`onScreenOn`、`postponeRest`、`endRestPhase`、`resync` 这四处会**清零 `workAccumMs` 开启新一段，却没有同步清零水位线**。水位线仍停在旧的高位，新一段一开始就被「压住」，`already` 被 `coerceIn(0, accum)` 顶到上限、`deltaSec` 恒为 0 → **新一段整段漏记**。这正好解释了 20 分钟周期连做 3 轮却只记到第 1 轮的现象。
+
+**方案**：
+1. **`TimerStore` 新增 `recordedAccumMs` 水位线**（`KEY_RECORDED_ACCUM_MS = "recorded_accum_ms"`），记录「这段累计值已结算到哪个位置」，随 `TimerState` 落盘持久化。
+2. **`EyeTimer.recordWorkSession` 改为幂等结算**：只写入 `workAccumMs - recordedAccumMs` 的增量，写完立刻把水位线抬到当前 `workAccumMs`。增量不足 `MIN_RECORD_SECONDS`（5 秒）时**不写统计但照样抬水位线**，避免零头在后续出口被反复凑成一段重复计入。
+3. **自愈兜底**：结算前若发现 `recordedAccumMs > workAccumMs`（说明累计被重置过），视为本段尚未结算、按 0 处理。这样即使某条路径漏了清零，也不会把新一段永远压死。
+4. **在所有重置累计的出口同步清零水位线**：`onScreenOn`、`postponeRest`、`endRestPhase`、`resync`，以及跨天切换 `rollOverIfDayChanged`（新一段从零点起算，两者同步归零）。
+5. **修复超时用眼与正常结算的重复计数**：超时段结算（`overdueRecordedMs`）与 `recordWorkSession` 曾对同一段时长各记一次，是时长翻倍的根因之一，已按水位线口径统一。
+
+**验证**：新增 `WorkStatDedupTest`（13 例）覆盖去重与水位线语义；新增 `TickerCostTest`（3 例）锁住「每秒最多落盘一次」。`TickerCostTest` 做过**变异测试**确认非空：把 `EyeCareViewModel.kt` 的按需落盘改回无条件落盘后，`TickerCostTest > clockTick 每秒最多落盘一次` 确实 FAILED，还原后通过。全量单元测试 **46/46 通过**。
+
+**用户已真机验收通过。**
+
+---
+
+### 修复「页面切换动画掉帧卡顿」（尤其冷启动后第一次切换）
+
+**现象**：底部导航在板块之间切换时掉帧，**冷启动后的第一次切换尤其明显**，之后正常。
+
+**根因（两层，第二层是关键）**：
+
+1. **切换实现方式**：原用 `AnimatedContent` + 位移。问题不在「位移」本身，而在于它切换时把**新旧两页同时挂载**，两页各自跑完整的 measure / layout / draw；位移只是让这件事**每帧都可见**（连静止的旧页也要重排）。
+2. **第一次切换的一次性成本**：App 内嵌帧探针逐帧实测——第一次切页 50 帧里**掉 12 帧**、最差 **50.0ms**；紧接着第二次切同一页 82 帧、**掉 0 帧**、最差 **16.7ms**。同一份代码同一台手机，第二次一帧不掉，说明**动画代码本身没问题**，多出来的是该路径**第一次被执行**时的类加载 + 字节码验证 + 首次 JIT 开销（debug 包 28.4MB dex 且不优化，尤其明显）。
+
+**方案**：
+1. **改用 `HorizontalPager` + 弹簧**：Pager 是横贯三页的连续画布，每帧只布局一次，三页位移全走各自 `graphicsLayer.translationX`（合成层），**不触发 measure / layout / draw**；落位用临界阻尼 `Spring.DampingRatioNoBouncy`（Apple 默认约定：系统发起的落位不弹跳，回弹只留给手势）。Material3 药丸 indicator 保留并跟随 `settledPage`。
+2. **`beyondViewportPageCount` 1 → 2**：该参数决定两侧各有多少页**提前测量**，而首次测量 = 首次组合整棵子树；取 1 时设置页（距离 2）冷启动不组合，第一次切过去要现做「组合 750 行 + 首次 measure/draw」。
+3. **手写 `app/src/main/baseline-prof.txt`**（30 条，覆盖冷启动与首次切换热点）。**仅 release 生效**（已验证 debug 包内无 `baseline.prof`，AGP 只给 release 打），release 内为 `assets/dexopt/baseline.prof`，安装时 AOT 编译。
+4. **降低每秒常驻开销**：`clockTick` 一次 tick 只读一次盘、且只在真跨天时落盘（原为每秒无条件 `save`）；`StatsStore` 新增只读视图 `readAll`/`readAllToday`（原 `loadAll` 命中缓存仍整表复制，最多 90 天，而读「今日用眼秒数」也走这条路，每秒 7 次）；`ReportTab` 缓存键由秒级改分钟级（该页时长本就以分钟展示，秒级却每秒作废 `remember` 并重跑三次全表计算）。
+
+### 动效改为 Apple 弹簧规范
+
+参照 Apple《Designing Fluid Interfaces》：**弹簧只用「阻尼比 + 响应」两个参数描述**，而不该用「起止值 + 固定时长」；约定是**默认临界阻尼（`dampingRatio = 1.0`）不弹跳，只有手势本身带了动量时才允许回弹（~0.8）**。据此把全项目动效从「固定时长 tween」改为按场景选择弹簧或时长：
+
+1. **底部导航落页**：`SettleSpring = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)`（`ui/theme/Motion.kt`）。底部导航是**系统发起**的落位动作，没有动量需要延续，所以用临界阻尼、不回弹；回弹会显得油滑而不准。
+2. **卡片轮播**：跟手 **1:1**、**可打断**、**松手时速度交接**、到边界有**阻尼**；松手回弹用 `spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)`——这里允许回弹，因为动量是用户手势自己甩出来的。
+3. **动量去留改由速度判断**：`flingVelocityPx`（由 `300.dp` 换算的 px/s）决定是翻页还是弹回，**不再看拖动距离**——位移多少与「用户是否想翻页」无关。
+4. **不需要弹性的场景仍用时长**，但统一走 `Motion.kt` token 与曲线：入场/退场用 ease-out（`EaseOutStrong = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)`），屏幕内移动用 ease-in-out，**永不 ease-in**。
+
+**落地位置**：`ui/theme/Motion.kt`（弹簧参数与时长 token）、`ui/EyeCareApp.kt`（Pager 与导航弹簧）、`ui/Cards.kt`（轮播手势与速度判据）。
+
+---
+
+**顺带完成的动效复审（11 项）**：删除休息页倒计时每秒 fade+scale、删除柱状图 520ms 生长动画、设置页 Snackbar 加 600ms 静默窗口（原长按连点 ~11Hz 重播）、轮播跟手由 `Modifier.offset{}` 改 `graphicsLayer`、松手回弹由位移阈值改**速度阈值**、拖拽期不再每事件起协程、页点由动画 `width` 改 `scaleX`、步进器补按压反馈与无障碍语义、悬浮窗入场补 ease-out 插值器并按场景分退出时长、全项目裸 `tween` 统一走 `Motion.kt` token。
+
+**刻意不改**：进度环 300ms（State indication）、休息页整页入场（只收时长到 `MODAL_MS`）、免打扰卡淡入（频率低）、日/周/月档位切换不加过渡（用户要立刻看到数字）。
+
+**验证**：单元测试 **46/46 通过**（新增 `TickerCostTest` 3 例，已做变异测试确认非空测试）。真机实测：debug 第一次 50 帧/掉 12/最差 50.0ms；**release 第一次 87 帧/掉 0/最差 8.3ms**（=一个 120Hz 刷新周期）。确认原现象为 debug 构建固有的一次性类加载成本。
+
+**用户已真机验收通过。**
+
+---
+
+## v2.4.3 改动摘要
+
+### 修复「息屏后再亮屏误弹超时提醒」
+**现象**：用眼计时快到点、或已到点但未点「去休息」时息屏，再亮屏后会弹出**超时提醒**，而用户其实已离开、并未持续用眼。
+
+**根因**：`EyeTimer.onScreenOff` 在 `awaitingRest`（到点未休息）超时态下**不清除超时标记**；亮屏时 `onScreenOn` 看到 `awaitingRest=true`，直接恢复超时累计并重排超时闹钟 → 弹窗。息屏期间的空档被误当成「亮屏持续未休息」。
+
+**方案（`timer/EyeTimer.kt`）**：
+1. `LONG_OFF_RESET_MS` 由 **5 分钟缩短为 1 分钟**：抬手看时间、切后台等短暂息屏（<1 分钟）仍续算；真正放下手机（≥1 分钟）即清零。
+2. `onScreenOff`：超时态下先把超时时长结算入统计，再**清掉 `overdueCounting` 并撤销超时闹钟**，不再保留到亮屏恢复。
+3. `onScreenOn`：息屏 ≥1 分钟 → `resetToFreshCycle()`，清空用眼计时、作废超时态、撤掉通知与悬浮窗，**从 0 安静起算，无任何提示**；<1 分钟 → 续算剩余时间或恢复超时累计。
+4. `onOverdueReminder`：息屏期间冻结，不弹提醒；超时提醒只在**亮屏且持续未休息**时触发。
+5. `resync`：同样按 `LONG_OFF_RESET_MS` 判定长息屏清零。
+
+**用户已真机验收通过。**
+
+---
+
+## v2.4.2 改动摘要
+### 一、修复「到点自动全屏」在 Android 15/16 上失效（核心）
+**现象**：用眼计时正常、通知正常弹出，但到点后不会自动弹出全屏休息页（只有一条横幅）。亮屏、锁屏都无效。
+**根因（两层）**：
+1. **系统级行为变更**：Android 15（API 35）起，setFullScreenIntent 在亮屏解锁状态下不再自动拉起全屏界面，只退化成普通横幅（锁屏时才可能全屏）。这是系统行为，靠调通知参数无法绕过。
+2. **未声明悬浮窗权限**：AndroidManifest.xml 里根本没有 SYSTEM_ALERT_WINDOW，所以「应用详情」里看不到悬浮窗开关。
+**方案**：改用「悬浮窗权限 + 前台服务 + 自绘全屏 Overlay」：
+1. **notify/RestOverlayService.kt（新增）**：前台服务，用 WindowManager + TYPE_APPLICATION_OVERLAY 自绘全屏休息页（渐变背景 + 倒计时 + 护眼知识 + 按钮）。只在亮屏时弹；倒计时结束自动消失；可返回键/按钮提前结束。
+2. **AndroidManifest.xml**：新增 SYSTEM_ALERT_WINDOW、FOREGROUND_SERVICE、FOREGROUND_SERVICE_SPECIAL_USE 权限，注册 RestOverlayService。
+3. **AppForeground.kt（新增）**：@Volatile 前台标记，由 MainActivity.onResume/onPause 维护。
+4. **timer/EyeTimer.kt**：onWorkDeadline 到点时——开关关闭不动；息屏不动；前台→App 内休息页；后台亮屏有权限→beginRest + Overlay；无权限→降级横幅。各出口调用 RestOverlayService.stop() 防止残留叠层。
+5. **ui/SettingsTab.kt**：「到点自动全屏」开关开启前弹二次确认。
+6. **ui/DiagnosticsPanel.kt**：自检新增「悬浮窗（后台全屏）」项 + 授权引导。
+7. **notify/RestOverlayService.kt · ProgressRingView（补充修复）**：首版 Overlay 只画了静态倒计时大数字，漏了圆环进度条（App 内休息页有、后台覆盖没有，视觉不一致）。补上原生 Canvas 自绘的 ProgressRingView：轨道 + 从 12 点顺时针推进的进度弧，弧色随进度 绿→橙→红，与 Compose 端 EyeProgressRing 同一视觉语义；每秒随倒计时刷新。
+### 二、修复报告页横轴标签乱码（30 天档位）
+**根因**：横轴原为每个日期一个等宽槽位，30 天时每格仅约 11dp，9/1 被截断成 9。
+**修法**：新增独立刻度行 DateAxis，按档位固定少量刻度（月=6 个），SpaceBetween 排布、每格约 60dp，完整显示 M/d。
+
+
+---
+
+## v2.4.0 改动摘要
+
+这一版新增 **「超时二次提醒」**：用眼到点后，如果用户选择「稍后再说」而不去休息，超出的时间会继续计入当日用眼统计，并每隔 N 分钟重复提醒一次；同时把主页的「科普」独立页改为**卡片轮播**，并补上若干过渡动效。
+
+### 一、超时二次提醒（核心）
+
+**背景**：此前到点提醒后点「稍后再说」，倒计时停住、不再提醒，用户很容易「一拖再拖」，超出的用眼时间也不会进入统计，数据失真。
+
+**改动**：
+
+1. **timer/EyeTimer.kt**：实现一套超时累计状态机。
+   - 到点后进入「超时」态：overdueStartAt 记录起点，此后**亮屏时继续累计**、**息屏时冻结**（屏幕黑掉不算用眼），恢复亮屏再续上。
+   - 超时秒数通过 overdueDeltaSeconds() 单独计，最终并入当次工作会话，写入统计。
+   - 抽出两个**纯函数** accumulatedAt() 与 overdueDeltaSeconds()，便于单元测试覆盖核心算术。
+   - 多个出口（开始休息 / 停止 / 设置变更 / 息屏）都会撤销超时闹钟，避免悬挂提醒。
+   - 新增 onOverdueReminder()：每次被闹钟唤醒时累加本轮超时，刷新通知，并**再次调度**下一次提醒，形成每 N 分钟循环。
+2. **timer/AlarmScheduler.kt**：新增 ACTION_OVERDUE 广播动作、REQUEST_OVERDUE = 2004 请求码，以及 scheduleOverdueReminder() / cancelOverdueReminder()；列入 cancelAll() 统一回收。
+3. **notify/RestNotifier.kt**：新增 notifyOverdueReminder(context, overdueMinutes, totalWorkMinutes)，复用通知 ID 1001 **就地刷新**同一条提醒（不叠通知），文案展示已超时分钟数与本次累计用眼。
+4. **timer/TimerReceiver.kt**：when 增加 ACTION_OVERDUE -> EyeTimer.onOverdueReminder(context) 分支。
+5. **ui/SettingsTab.kt**：「计时」分组新增「超时二次提醒间隔」设置项（含开关与分钟输入），落盘后即时生效。
+
+**修复的 Bug**：
+
+- overdueRecordedAfter 参数顺序写反（3 处），导致已计入的超时段落被重复累计。
+- notifyOverdueReminder 传参语义错误（分钟 / 秒与总时长错位）。
+
+### 二、科普页 → 主页卡片轮播
+
+**背景**：底部导航原先有一个独立的「科普」页，只展示一条随机文案，信息密度低、来回切换成本高。
+
+**改动**：
+
+1. **ui/Cards.kt**：新增 TipCarousel 轮播组件 —— AnimatedContent 实现左右切换动画 + 手势滑动，**零新依赖**（未引入 pager）。
+2. **ui/EyeCareApp.kt**：删除独立的 TIPS 导航页，主页改用 TipCarousel 展示科普；并补充过渡动效（Tab 切换淡入、免打扰卡淡入）。
+
+### 三、测试
+
+- **新增 test/OverdueStatTest.kt**：10 个用例，覆盖超时统计的核心算术（累计、冻结、跨段合并、边界值）。
+- 全部 **25 个单元测试通过**：AppSettingsTimeTest(11) + DndWindowTest(4) + OverdueStatTest(10)。
+
+### 四、构建与环境
+
+- **AGP 9.0.0 + Gradle 9.1.0**。
+- **关键修复**：AGP 9 的 optimizeReleaseResources（aapt2 optimize）在本 proot 环境下**静默产出空资源包**，导致成品 APK 缺失 AndroidManifest.xml / resources.arsc，无法解析安装（系统报 FileNotFoundException: AndroidManifest.xml）。已在 gradle.properties 关闭资源优化：`android.enableResourceOptimizations=false`。关闭后产物回归正常（155 条目、含 manifest + arsc + 68 个 res/）。
+- **签名**：app/build.gradle.kts 新增 signingConfigs.local，按「环境变量 EYECARE_KEYSTORE → user.home → /root/.android/debug.keystore」探测 keystore；找不到时退化为未签名构建，不影响其他环境。release 默认 v2/v3 签名。
+- **产物**：app/build/outputs/apk/release/app-release.apk，已在真机通过 pm install 验证安装成功（versionCode 30 / versionName 2.4.0）。
+
+### 涉及文件
+
+| 文件 | 操作 |
+|---|---|
+| timer/EyeTimer.kt | 超时累计状态机；新增 onOverdueReminder()、纯函数 accumulatedAt() / overdueDeltaSeconds() |
+| timer/AlarmScheduler.kt | ACTION_OVERDUE / REQUEST_OVERDUE / scheduleOverdueReminder() / cancelOverdueReminder() |
+| timer/TimerReceiver.kt | 新增 ACTION_OVERDUE 分支 |
+| notify/RestNotifier.kt | notifyOverdueReminder()（就地刷新 ID 1001） |
+| ui/SettingsTab.kt | 新增「超时二次提醒间隔」设置项 |
+| ui/Cards.kt | 新增 TipCarousel 轮播 |
+| ui/EyeCareApp.kt | 删除 TIPS 页、主页改轮播、补动效 |
+| test/OverdueStatTest.kt | 新建（10 用例） |
+| app/build.gradle.kts | versionCode = 30 / versionName = "2.4.0"；新增本地签名配置 |
+| gradle.properties | 关闭 AGP 9 资源优化（proot 兼容） |
+
+---
+
+## v2.3.15 改动摘要
+
+这一版是一次 **UI / 交互重构**：把设置页从「只读摘要 + 弹窗编辑」改成「所有参数直接铺在页面上、改一下立即生效」，同时把底部导航与顶栏的 emoji 换成矢量图标，并把休息结束提示音的音源选择收成下拉框。
+
+### 一、设置页即时生效 + 卡片流
+
+**背景**：此前设置页四张卡只显示当前值，真正能改的东西全藏在一个弹窗里 —— 必须点底部「修改设置」按钮才弹出，改完点「保存」再关掉。两段式操作繁琐，且与「设置就是拿来改的」这一直觉不符。
+
+**改动**：
+
+1. **新建 `ui/SettingsTab.kt`**（555 行）：把原 `SettingsDialog` 里全部 11 项参数直接铺到设置页上，分四张分组卡片：
+   - **计时**：用眼提醒间隔（1–120 分）、休息时长（5–300 秒）、每日用眼目标（10–720 分）
+   - **提醒**：到点自动全屏、免打扰开关、免打扰时段（`HH:mm`）、久坐提醒、休息结束提示音开关 + 振动开关 + 音源
+   - **久坐**：久坐提醒开关、提醒间隔（30 / 45 / 60 分钟选项片）
+   - **外观**：自动夜间模式
+2. **即时生效**：所有控件统一走 `viewModel.updateSettings(context, transform(viewModel.settings))`，基于最新设置做变换，避免闭包捕获旧值互相覆盖。
+   - 开关 / 下拉 / 选项片：点一下立即落盘；
+   - 数字输入框：**失焦或键盘 Done** 时提交，避免每敲一位都写盘；
+   - 时间输入框：失焦 / 回车时用 `AppSettings.parseMinuteOfDay` 解析提交，非法值回退原值。
+3. **删除旧两段式**：移除「修改设置」按钮、`SettingsDialog` 弹窗调用与 `showDialog` 状态；`EyeCareApp.kt` 内的旧私有 `SettingsTab` / `SettingSummaryCard` / `AboutCard` / `openUrl` 及 `SettingsDialog` 调用（约 227 行）一并清除，并清理随之无用的 import。
+4. **底部保留**：提醒可靠性自检卡片、关于卡片（版本 / 仓库 / 免责声明入口）仍在页面下方。
+
+### 二、底部导航与顶栏 emoji → 矢量图标
+
+**背景**：底部四个 `NavigationBarItem` 与顶栏设置按钮此前用 emoji（⏱️ / 💡 / 📊 / ⚙️）当图标，观感偏随意，与「简约大气」的目标不符。
+
+**改动**：
+
+1. **新建 `ui/components/EyeIcons.kt`**（232 行）：手写 5 个 `ImageVector` —— `Timer`（秒表）、`Tips`（灯泡）、`Report`（三根柱子）、`Settings`（齿轮）、`ArrowDropDown`（下拉三角）。
+   - **不引入 `material-icons-extended`**：本地 Gradle 缓存没有该依赖，且它会让包体膨胀几十 MB；手工内联所需 path，合计仅几 KB。
+2. `EyeCareApp.kt` 中 4 个 `NavigationBarItem` 与顶栏 `IconButton` 的 emoji 全部替换为 `Icon(EyeIcons.XXX)`。
+
+### 三、休息结束提示音音源 → 下拉选择
+
+**改动**：`SettingsDialog.kt` 中原先 6 行平铺 `RadioButton` 的音源单选，收成一个 `OutlinedButton` + `DropdownMenu` 下拉框（菜单项带 `RadioButton` 作为选中标识），右侧保留「试听」按钮，当前音源说明与音量提示显示在下方小字。复用 `EyeIcons.ArrowDropDown`。
+
+### 四、卡片描边
+
+`ui/Cards.kt` 的 `SoftCard` 增加一层极淡描边（`outline` 18% 透明度、1dp 宽），让白卡从米白 / 夜色底里「浮」起来 —— 此前只有背景色差（`surfaceVariant` vs `background`），层次几乎为零。全局生效，日夜两套主题自然过渡。
+
+### 验证
+
+- `:app:compileDebugKotlin` ✅
+- `:app:testDebugUnitTest --rerun-tasks` ✅
+- `:app:assembleDebug --rerun-tasks` ✅
+- 真机实测：设置页即时生效、数字失焦提交、音源下拉与试听、卡片描边层次均正常。
+
+### 涉及文件
+
+| 文件 | 操作 |
+|---|---|
+| `ui/SettingsTab.kt` | 新建（555 行） |
+| `ui/components/EyeIcons.kt` | 新建（232 行） |
+| `ui/EyeCareApp.kt` | 导航/顶栏图标替换；删除旧私有 `SettingsTab` 等约 227 行 |
+| `ui/Cards.kt` | `SoftCard` 加描边 |
+| `ui/SettingsDialog.kt` | 音源改下拉；清理 import |
+| `app/build.gradle.kts` | `versionCode = 29` / `versionName = "2.3.15"` |
+
+---
+
+## v2.3.14 改动摘要
+
+**维护性更新**：GitHub 用户名由 `HuaHai-141225` 变更为 `HuaHai-114514`，同步更新应用内硬编码的仓库地址。
+
+**修改**
+
+1. `data/AppInfo.kt`：`REPO_URL` 与 `REPO_URL_SHORT` 由 `HuaHai-141225` 改为 `HuaHai-114514`。设置页「关于」区块的「打开仓库」按钮与展示的短地址随之生效。
+2. `build.gradle.kts`：`versionCode = 28` / `versionName = "2.3.14"`。
+
+**说明**
+
+- 无功能变更，仅地址迁移。旧仓库地址 `github.com/HuaHai-141225/eyecare` 由 GitHub 自动 302 跳转到新地址，旧链接不会失效。
+- 本地 git remote 已同步改为 `git@github.com:HuaHai-114514/eyecare.git`，SSH 认证验证通过（`Hi HuaHai-114514!`）。
+- 历史 commit（`adfcad9` ~ `906cd93`）的作者名在 git 历史中仍为 `HuaHai-141225`，GitHub 已将其关联至新用户名，无需处理。
+
+---
+
+## v2.3.13 改动摘要
+
+这一版不加功能，只补三件「该有但一直没做」的事：**免责声明**、**仓库地址标注**、**首次启动引导**。
+
+**新增**
+
+1. **`data/Disclaimer.kt`**：免责声明全文（四段）——辅助提醒工具、不构成医疗建议、身体不适请及时就医、纯本地不收集信息、后果自负。写成常量供引导页与设置页共用，避免两处文案漂移。
+2. **首次启动引导 `ui/OnboardingDialog.kt`**：分两步。
+   - **第 1 步 · 免责声明**：必须点「我已知悉，继续」才能进入下一步，外部点击 / 返回键**无法绕过**。
+   - **第 2 步 · 可靠性设置**：逐项列出五项检查（通知权限、精确闹钟、全屏通知、电池优化、自启动），每项带「去开启」跳转；可点「稍后设置」跳过。
+   - 无论走完还是跳过，都会写入完成标记（`OnboardingStore`），之后不再自动弹出。
+3. **`data/OnboardingStore.kt`**：完成标记独立存放于 `eye_care_onboarding` 这份 SharedPreferences，与用户设置（`AppSettings`）解耦 —— 「引导是否看过」属于应用状态，不属于用户设置。
+4. **`data/AppInfo.kt`**：集中管理仓库地址与版本号读取（用 `PackageManager` 而非 `BuildConfig`，不动构建配置）。
+5. **设置页「关于」区块**：展示「护眼时光 v{版本号}」「开源项目 · 欢迎查看源码与反馈问题」、可点击的仓库短地址，以及「打开仓库」「免责声明」两个按钮（后者弹出只读的 `DisclaimerDialog`，文案与引导页同源）。
+
+**复用与解耦**
+
+- `DiagnosticsPanel.kt` 中的 `DiagItem` / `DiagRow` / `collectDiagnostics` 由 `private` 改为 `internal`，引导页第 2 步直接复用同一批检查项 —— 检查逻辑只有一份，不会出现「自检说开了、引导说没开」的漂移。
+- 想重看可靠性设置，走「护眼设置 → 提醒可靠性自检」；想重看免责声明，走「护眼设置 → 关于 → 免责声明」。
+
+---
+
+## v2.3.12 改动摘要
+
+这一版把「休息结束提示音」从 v2.3.11 的**固定内置单音**，改回**可选音源**：既能跟随系统通知铃声，也能从应用内置的若干音效里挑一个。
+
+**背景**：v2.3.11 为了根治「一前一后两声」，把音源锁死成内置单脉冲音 —— 治好了「两声」，也顺手砍掉了「用系统铃声」这个需求。用户明确希望能自己选，所以这一版把选择权交回来。
+
+**新增**
+
+1. **`notify/RestSoundSource.kt`**：6 个音源的枚举，含展示名、内置资源 id（系统音源为 `null`）、一行说明。
+2. 设置页新增**音源单选**（6 行 `RadioButton`），每行带一句 hint 说明会不会「两声」，并各带一个「试听」按钮 —— 切到哪个当场就能听，不必反复保存。
+
+**音源清单**
+
+| # | 音源 | 类型 | 说明 |
+|---|---|---|---|
+| 1 | **跟随系统通知铃声** | 系统 | 即 `WaterDrop_preview` 那类铃声，**默认**；若铃声本身多脉冲（如水滴声），会听到两声 |
+| 2 | 内置 · 清音 | 单脉冲 | 复用 v2.3.11 的 `rest_end_chime.ogg`，音色不变 |
+| 3 | 内置 · 柔音 | 单脉冲 | 中音、柔和（`rest_end_soft.ogg`，0.55s） |
+| 4 | 内置 · 沉音 | 单脉冲 | 低音、更沉（`rest_end_low.ogg`，0.60s） |
+| 5 | 内置 · 上行双音 | 双脉冲 | 「嘀-嗒」上扬（`rest_end_rise.ogg`，0.49s，**刻意做成两声**） |
+| 6 | 内置 · 下行双音 | 双脉冲 | 「嗒-嘀」下坠（`rest_end_fall.ogg`，0.49s，**刻意做成两声**） |
+
+**关键取舍（务必知悉）**
+
+- **默认值 = 跟随系统通知铃声**：这等于把 v2.3.11 刚移掉的那个水滴声请回来。升级后若不动设置，会**重新听到「嘀-嗒」两声** —— 这是用户知情的选择，不是回归缺陷。
+- 想要「稳定只响一声」，请手动选第 2~4 项（内置单脉冲音）。
+- 第 5、6 项本身含两个音，选它们必然听到两声。
+
+**实现**
+
+1. `RestSoundPlayer.play(context, source)`：按音源加载 —— 系统音源走原来的 `通知 → 来电 → 闹钟` 兜底链；内置音源直接播对应 `raw/` 资源；**内置加载失败仍退系统铃声**，最坏也有一声，不会静默失败。设置页「试听」与正式播放走同一条路径（试听听到什么，到点就听到什么）。
+2. `AppSettings` 新增 `restEndSoundSource` 字段（默认 `SYSTEM_RINGTONE`），持久化键 `rest_end_sound_source`；读取走 `RestSoundSource.fromKey`，**任何无法识别的值都回退默认**，旧版本升级、存储写坏、将来删音源都不会崩。
+3. 汇总卡文案 `describeRestEndSound` 增加 `sourceLabel` 参数，显示为「已开启（跟随系统通知铃声 + 振动）」/「已开启（内置 · 清音）」等。
+4. 音效由 Python 合成正弦波 + 指数衰减包络、ffmpeg 编码（`44100Hz / mono / libvorbis ~96kbps`）；双音两段之间留了真实静音间隙，逐 10ms 包络复核确认单音 1 段、双音 2 段。
+
+**单测**：新增「音源选项与默认值」「音源从键还原_未知值回退默认」两组；`describeRestEndSound` 断言更新为带音源名的文案。全套 15 个测试通过。
+
+---
+
+## v2.3.11 改动摘要
+
+这一版解决的问题是 v2.3.10 之后仍然存在的「休息结束听到**一前一后两个声音**」。结论有点出人意料：**不是应用响了两次，是那一声的内容本身就是两声**。
+
+**取证过程（真机，非推测）**
+
+1. 先看 v2.3.10 的现场：`dumpsys audio` 逐 `piid` 核对，每轮休息会创建两个 `MediaPlayer`，其中**第一个从未 `event:started`**（生命周期固定为「创建 → 设成 `USAGE_NOTIFICATION_RINGTONE` → `releasing`」），第二个才真正播放（`event:started` → 506ms → `event:stopped`）。**两个对象是一个 `Ringtone` 在换音频属性时「释放旧实例、新建实例」的副产物，不是两个声源** —— 上一版基于此的推断被这条证据推翻。到 v2.3.11 改成 `MediaPlayer` 后再复现（19:30:56 那一次），全程**只有一个 player**（`new player` → `event:started` → `event:stopped` → `releasing`），幽灵实例连出现的机会都没有了。
+2. `dumpsys notification` 核对 1004 通知：挂在静默渠道 `eye_care_rest_end_v1`（`mSound=`、`mVibrationEnabled=false`），并被归入 `Aggregate_SilentSection`。**通知可见 ≠ 通知发声**，它结构上不具备响声能力。
+3. 把用户的通知铃声文件抓出来做波形分析（`ffmpeg` 统一转 16kHz 单声道 + 逐 10ms 包络，判定阈值取峰值的 5%）：
+   - `WaterDrop_preview.ogg`：**主能量只有一团（0.03–0.09s），但内部有两个瞬态** —— 0.040s 峰 21655、0.080s 峰 11041，中间 0.070s 回落到 6900，**间隔约 40ms**，正是水滴声的「嘀-嗒」。（这组数字是在原始 44.1kHz 上复核过的；早先 8kHz 重采样版本低谷更浅，属方法误差。）
+   - 横向对照其他系统铃声（同口径，括号内为时长 ≥100ms 的**主段**）：`Chirp` **2 段**（0.02–0.39、0.55–0.92）、`Bottle` **4 段**（0.02–0.08、0.29–0.35、0.59–0.66、0.91–0.99）、`Flute` **3 段**主段（另有 3 处 10–50ms 碎点，合计 6 段）、`Fresh` 2 段（0.00–0.17、0.18–0.82，实际连成一大团，听感上是一声长音）；**只有 `Crystal` 是真正的一声**（0.03–0.98 连续 950ms，尾部仅两个 <20ms 的碎点）。**多脉冲在这个 ROM 的铃声库里是常态**，跟随系统铃声就无法保证「只响一声」。
+
+**修复**
+
+1. **提示音改为应用内置单音**：新增 `res/raw/rest_end_chime.ogg`（0.55s、指数衰减、**全曲只有一个能量段**），`RestSoundPlayer` 优先播它，系统铃声降级为兜底（仅在资源异常时使用）。响亮程度与用途不变（仍是 `USAGE_NOTIFICATION`，走通知音量，静音 / 勿扰时安静）。
+2. **播放器从 `Ringtone` 换成 `MediaPlayer`**：`Ringtone` 换属性会产生"幽灵实例"（上面第 1 条），`MediaPlayer` 则一次创建、播完即释放（`setOnCompletionListener` / `setOnErrorListener` 都做了释放），音频系统里更干净。
+3. **设置页新增「试听」按钮**：改完音源后可以当场验证「只有一声」。再有人怀疑声音不对，不必等到下一次休息。
+4. 设置页小字与 README 的限制表同步改成「内置单音、不跟随系统铃声」。
+
+**为什么这次是「真修」**：前几版都在改"谁来播、播几次"，而根因在"播的内容"里 —— 只要音源是那个双脉冲文件，谁播都是两声。换成自带单脉冲音后，这个变量终于被移除了。
+
+---
+
+## v2.3.10 改动摘要
+
+这一版是**推翻 v2.3.9 的方案之后重建的**，三件事：把发声权收回应用、让通知永久闭嘴、修正振动的用途。
+
+**修复**
+
+1. **休息结束「一声不响、也不振动」**（v2.3.9 的回归）。两个缺陷，性质完全不同：
+
+   - **声音**：v2.3.9 把发声权整个交给通知渠道，结果在部分 ROM（实测 HyperOS）上通知确实发出去了（`dumpsys notification` 里 id=1004、渠道参数完全正常），系统却一声没播；`dumpsys audio` 里连一条播放记录都没有。这条路**既不受我们控制、也无法保证有效**，所以收回。
+   - **振动**：根因是**用途选错了**。`VibrationEffect.createOneShot()` 不带 usage 时默认按 `USAGE_TOUCH`（触摸反馈）记账，而手机上手感/触摸振动是关着的，于是系统每次都直接丢弃 —— 真机 `dumpsys vibrator_manager` 里本应用每一条记录的末尾都写着 `ignored_for_settings`：
+
+     ```
+     usage: TOUCH | com.java.myapplication | played: Step=300ms | ignored_for_settings
+     ```
+
+     顺带说明：**v2.3.8 时代的振动其实也一直被忽略**，只是那时有铃声盖着，没察觉。
+2. **振动改用「通知」用途**：API 33+ 走 `VibrationAttributes.createForUsage(USAGE_NOTIFICATION)`、API 26–32 走 `AudioAttributes{USAGE_NOTIFICATION}`、API 24–25 沿用无用途重载（该版本本就没有触摸过滤）。副作用（与整体取舍一致）：系统里关掉「通知振动」时它也不会振。
+3. **通知永久静默**：`notifyRestEnd()` 去掉了 `soundEnabled` / `vibrate` 两个参数，固定走唯一的静默渠道 `eye_care_rest_end_v1`；v2.3.9 那条有声音的 `eye_care_rest_end_v2` 不再创建，只保留常量用于在设备上**清理**它。通知从此不知道「开关」的存在，也就不可能出声。
+4. **`RestSoundPlayer.kt` 重新登场**（v2.3.9 曾整个删除）：`play()` 先 `stop()` 再播，音源按 `通知铃声 → 来电铃声 → 闹钟铃声` 取，挂 `USAGE_NOTIFICATION`，另有 8 秒兜底上限。响声重新变得可控。
+5. 设置页「休息结束提示音」的开关说明改成「由应用自己响一声」，并补一句小字：声音跟随系统通知铃声与通知音量；**若听到两个音，通常是铃声文件本身是双音**（换个单音铃声即可确认）；静音 / 勿扰时会安静。
+
+**改后的职责划分**
+
+| 角色 | 负责 |
+|---|---|
+| `RestSoundPlayer` | **唯一**的响声来源（只播一次） |
+| `RestVibrator` | **唯一**的振动来源（「通知」用途） |
+| `RestNotifier`（1004 通知） | 只留一条痕迹，**永不发声** |
+
+**为什么这次能保证只响一次**：① `finishRest` 的幂等闸门仍然有效，四个入口（界面 ticker、设置变更、重新同步、`ACTION_REST_DONE` 闹钟）全在主线程串行；② 通知固定静默，**第二条声源在结构上不存在**；③ `play()` 内部先停掉上一次。
+
+**说明**：静音 / 勿扰时**不响、只留通知和振动**（与短信、微信一致），这是明确取舍 —— 代价是系统里关掉「通知振动」时振动也会一起停。想要静音键也挡不住的提醒，可以把这个取舍改回去（走闹钟通道）。
+
+---
+
+## v2.3.9 改动摘要
+
+**修复**
+
+1. **休息结束会响两次**：v2.3.6~v2.3.8 的提示音是**应用自己播放**的（`RestSoundPlayer` 用 `RingtoneManager` 取铃声再 `Ringtone.play()`），而休息结束同时还会发一条通知 —— 两条独立的发声路径在同一时刻各自出声，就成了「叮一下」叠着「叮一下」。真机 `dumpsys audio` 也印证了这点：每次休息结束，应用进程都会接连创建**两个** MediaPlayer（一个 `USAGE_NOTIFICATION_RINGTONE` 仅用于探测音源后随即释放，一个 `USAGE_NOTIFICATION` 真正播放）。
+2. **改为结构性消除**：应用**不再自己播放任何音频**。`RestSoundPlayer.kt` 整个删除，提示音改由**通知渠道**负责播放（系统播，单一来源）。同时 `AppSettings.isRestEndVibrateActive()` 把「提示音关掉就不该再震」的规则抽成纯函数并补了单测。
+
+**新增**
+
+3. `notify/RestVibrator.kt`：只做一次 300ms 短振动（`VibrationEffect.createOneShot`，API 31+ 走 `VibratorManager`），全程 try/catch 静默失败。振动必须自播而不能交给渠道 —— 渠道的声音/振动/重要性**只在渠道首次创建时生效**，之后被系统锁死，而「同时振动」是设置页里要求**实时生效**的开关。
+4. `RestNotifier` 启用双渠道：`eye_care_rest_end_v2`（有声音，`IMPORTANCE_DEFAULT` + 系统通知铃声）与 `eye_care_rest_end_v1`（静默，`IMPORTANCE_LOW`）。开提示音走前者、关提示音走后者 —— 同样是因为渠道参数被系统锁定，开关声音只能靠切渠道，不能靠改渠道。
+5. `RestNotifier.cancelRestEnd()`：提示音现在挂在通知上，取消通知 = 收起痕迹 + 停止响声。休息开始时清上一轮痕迹、手动「继续工作」时立即掐掉响声，都改调它。
+6. 通知构建处**移除** `.setSilent(true)` —— 它在 API 26+ 会把渠道的声音一并压掉。静音与否现在完全由渠道决定。
+
+**说明**
+
+- 振动调用被特意放在通知权限检查**之前**：没给通知权限时响声必然没了，此时振动是唯一的提示手段，不该被一起吞掉。
+- 音源走通知通道的取舍（与 v2.3.8 相同）：提示音跟随**通知音量**，静音模式下不会响、勿扰可能拦截，此时仅剩振动。
+
+---
+
+## v2.3.8 改动摘要
+
+**修改**
+
+1. **提示音音源换成系统通知铃声 + 短振动**：v2.3.7 是「给闹钟铃声硬加时长上限」，属于治标 —— 闹钟铃声本身就不是为「提醒一下」设计的。现在播 `TYPE_NOTIFICATION`（用户把通知铃声设成「无」时依次退化为来电、闹钟铃声），音频属性改为 `USAGE_NOTIFICATION`，音量随之归入**通知音量**通道，与短信、微信一致；同时用 `Vibrator`/`VibratorManager` 做一次 300ms 短振动。通知铃声天生只有一两秒，响完即止，不再需要用户去设时长。
+2. 设置页「提示音时长（3/5/8 秒）」三档芯片移除，改为「同时振动」开关（默认开启）。汇总卡文案相应变为「已开启（铃声 + 振动）」/「已开启（仅铃声）」/「已关闭」，该文案抽成纯函数 `AppSettings.describeRestEndSound` 以便单测。
+3. 新增 `android.permission.VIBRATE`（普通权限，安装即授予，不弹框）。
+4. 保留两道防线：单例持有当前 `Ringtone`，播放前先停掉上一个；内部仍留 8 秒兜底上限 —— 万一用户把通知铃声设成了几十秒的自定义音频，到点强制停止，绝不变成「响不停」。
+
+**说明**：v2.3.7 的 `rest_end_sound_seconds` 偏好键已废弃，旧设备上残留的该键会被忽略（无需清理，多条无害数据不影响行为）。
+
+---
+
+## v2.3.7 改动摘要
+
+**修复**
+
+1. **提示音改为限时播放**：v2.3.6 用的是系统闹钟铃声，而闹钟铃声本身长达几十秒，实际体验是「响个不停」。现在单次播放时长由设置决定（**默认 5 秒**，可选 3 / 5 / 8 秒），到点由主线程 Handler 自动停止；同时显式关掉 `isLooping`，避免个别 ROM 的铃声循环播放。（v2.3.8 换了音源，时长选项已移除）
+2. 用户手动点「我已休息好，继续工作」时立即掐掉还在响的提示音，不必等它自己停。
+
+---
+
+## v2.3.6 改动摘要
+
+**修复**
+
+1. 提醒通知正文里的「已连续用眼 N 分钟」以前是**写死的 20 分钟**，与设置里的间隔值无关。现在 `notifyRestReminder` 会带上 `workMinutes`，正文随设置变化。
+2. 「到点自动全屏」在 **Android 14+** 静默失效：系统对非通话/闹钟类应用的 `USE_FULL_SCREEN_INTENT` 默认拒绝，旧代码无条件调用 `setFullScreenIntent`。现在改为**先查权限再弹**，没权限时降级为横幅提醒，并在通知副标题里说明「全屏提醒权限未开启，已降级为横幅提醒」。
+
+**新增**
+
+3. **休息结束提示音**：使用系统默认闹钟铃声（取不到时退化为通知铃声），走 `USAGE_ALARM` 音频属性，手机静音键不影响。设置项「休息结束提示音」默认开启；关闭后仍会发一条**静默通知**做兜底留痕。（v2.3.8 已改为通知铃声 + 短振动，见上）
+4. **提醒可靠性自检页**（设置页底部入口）：五项逐一检查——通知权限、精确闹钟、全屏通知、电池优化、自启动——每项显示 ✅/⚠️ 与说明，可一键跳转到对应的系统设置页。自启动项因 MIUI/HyperOS 无公开查询接口，如实标注为「需手动确认」。
+
+**优化与清理**
+
+5. `StatsStore` 增加进程内缓存：界面每秒刷新时不再反复反序列化整份统计 JSON；报告页不再把每秒变化的 `todayWorkSeconds` 当作缓存键（以前等于每秒重算 30/60 天数据）。所有写路径统一经 `saveAll` 刷新缓存。
+6. 删除无调用方的死代码、模板残留资源（`colors.xml`）与两个模板测试空壳。
+
+
+---
+## v2.7.1 改动摘要
+
+这一版把用眼统计换成更可靠的数据来源，修掉了几个计时不准的问题，并重做了时间设置的交互。完整说明见 [releases/v2.7.1.md](releases/v2.7.1.md)。
+
+**统计改用系统亮屏时长**
+
+之前 App 自己记用眼时长，靠「屏幕亮了开始算、屏幕灭了停下」一笔笔记账。这个记账依赖系统广播，一旦广播丢失或 App 被系统回收，就会以为屏幕一直亮着，把整段息屏时间也算成用眼——统计数字越用越虚高，实测有息屏一小时后多算 62 分钟的情况。
+
+现在改为直接读系统的亮屏记录，不再自己记账；系统这份数据由系统维护，不会因 App 掉线而记错。**亮屏不等于在用眼**，数字包含「屏幕亮着但没在看」的时间，卡片底部会写明来源。原「最长连续用眼」在新口径下无对应概念，已移除；休息次数仍由 App 自己记（那部分没有虚高问题）。需在系统设置授予「使用情况访问」权限，App 内提供跳转入口；未授权时数字位显示 `--`，不拿可能是错的值充数。
+
+**修掉计时不准**
+
+1. **息屏后亮屏，计时没有从零重新开始**，且时好时坏。原因是两个独立缺陷叠加：结算是算对了却没写进磁盘；另外此前把「屏幕亮起」这个系统通知摘掉了一半，导致没锁屏就直接亮屏的情况完全不走重置逻辑（锁屏后解锁才生效），所以表现成时好时坏。
+2. **早上首次亮屏误弹「超时 500+ 分钟」**：跨天时采信了跨夜的陈旧时间戳。
+3. **切后台回来从零重算**：兜底判据与新段落逻辑形成自维持死循环，段序号实测疯涨 79 → 84 → 85。
+
+**时间设置改滚轮**
+
+分钟类设置由步进器改为滚轮：停稳后高亮中间格，底部「取消 / 确定」，点确定才写入；「每日用眼目标」改双栏（小时 0..12 + 分钟 0..59，允许 0 小时）；字号 18→20sp、行高 44→48dp、视口 220→240dp。
+
+**数据报告页**
+
+- 图表拆成两张：原「亮屏时长 / 休息次数」双序列共用一根纵轴，量纲不同（分钟 vs 次）导致柱高不可比、休息柱几乎不可见。现拆为「每日亮屏时长」「每日休息时长」两张单序列图，各用各的纵轴。
+- 休息侧由「次数」改为「时长」，取 `DailyStat.restSeconds`（`addRest` 逐次累加的**真实**休息秒数，中途提前结束按实际时间计），与亮屏同为时长口径。
+- 日档位不画柱状图（单日无横向比较意义，且与「今日用眼小结」重复），改由该卡承载，并补上「休息时长」指标。
+- `StatItem` 数字改自适应字号（`TextAutoSize.StepBased`，30sp→16sp 步进收缩），修掉「5小时58分」被挤断成两行、末字孤行的问题。
+- 柱宽加封顶（单序列 44dp / 双序列 22dp），修掉单槽位时柱子被画成 145dp 宽胶囊的问题。
+
+**视觉与交互**
+
+- 「提醒可靠性自检」页的 ✅ / ⚠️ 换成矢量图标（原 emoji 与文字基线不齐、行高被撑开换行），同步替换报告页两处标题 emoji；**科普提示、通知、休息页 emoji 保留**（属内容本身，非功能标记）。
+- 免打扰卡片改竖条样式；首次引导弹窗标题改矢量图标。
+- 首页三页标题居左，删两处副标题；导航栏高亮改即时。
+- 休息页两按钮改绿色实心、各占一半宽度。
+- 修正「连续用眼」被拆段的问题：原实现把每一次增量结算都当成独立的一段，真连着看 40 分钟会被拆成几个 2 分钟。
+
+**清理**
+
+删除排查期间临时加入的诊断代码（计时状态日志、写盘追踪，以及设置页里对应的「计时诊断日志」区块），并移除仓库根的 `AGENTS.md`。
+
+**验证**
+
+单元测试 79 / 79 通过，0 失败（新增 `ScreenTruthTest`、`GenerationDedupTest`、`ScreenEdgeDispatchTest`）。真机验收：用眼时长统计、息屏后亮屏重置、跨天亮屏重置均通过。
