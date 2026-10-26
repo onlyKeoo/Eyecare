@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -20,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -27,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -415,18 +418,28 @@ private fun TimerTab(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
 
         // 立即休息按钮（手动触发时才起算休息倒计时）
-        Button(
-            onClick = { viewModel.startRest(context) },
-            shape = CircleShape,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            )
-        ) {
-            Text("现在休息一下", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+        //
+        // v2.7.4：从「全宽 56dp 实心主色」降为「居中胶囊 + 描边」。
+        // 主流程是到点自动弹全屏休息页，这个按钮只是**手动提前休息**的入口，
+        // 却占了整行宽度 + 最高饱和度主色，视觉权重压过进度环本身，
+        // 让人误以为它是本页的主行动。降级后环才是唯一视觉主体。
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            OutlinedButton(
+                onClick = { viewModel.startRest(context) },
+                shape = CircleShape,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
+                contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    "现在休息一下",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
 
         Spacer(Modifier.height(24.dp))
@@ -497,19 +510,25 @@ private fun ReportTab(viewModel: EyeCareViewModel, context: Context) {
         // 24 槽位时柱宽只有 5.3dp（画布 305dp ÷ 24 ÷ 1.5 × 0.62），
         // 圆角占去一半，看上去就是一根根细线，既不好看也难点中。
         // 12 槽时柱宽约 10.5dp，既能分辨又保留了"几点到几点"的信息量。
+        //
+        // v2.7.5：标签改为**区间**（「12–14点」）而不是起点（「12点」）。
+        // 柱子代表两小时的总和，只写起点会让用户以为是单小时数据，
+        // 点开读数显示「12点 · 亮屏 108分钟」时更显矛盾（一小时不可能 108 分钟）。
         val src = hourly ?: List(24) { 0L }
         src.chunked(2).mapIndexed { bucket, pair ->
             val startHour = bucket * 2
-            "${startHour}点" to (pair.sum() / 60).toInt()
+            val endHour = minOf(startHour + 2, 24)
+            "${startHour}–${endHour}点" to (pair.sum() / 60).toInt()
         }
     }
-    // 只在已过去的小时上取最大值，避免整行 24 个槽位被空白拉平
-    val hourlyPeakHour = remember(hourly) {
-        val h24 = hourly ?: return@remember -1
+    // v2.7.5：峰值改为在**合并后的 12 根柱子**上找，与图表实际展示的口径一致。
+    // 原先在 24 个小时里找峰值，再拿那个单小时下标去拼「13–14点」的文案，
+    // 既与 2 小时分组对不上，也会出现「峰值 13 点」但 13 点那格其实属于 12–14 组的错位。
+    val hourlyPeakIndex = remember(hourlyData) {
         var peak = -1
-        var peakSec = 0L
-        h24.forEachIndexed { h, sec ->
-            if (sec > peakSec) { peakSec = sec; peak = h }
+        var peakMin = 0
+        hourlyData.forEachIndexed { i, entry ->
+            if (entry.second > peakMin) { peakMin = entry.second; peak = i }
         }
         peak
     }
@@ -614,8 +633,8 @@ private fun ReportTab(viewModel: EyeCareViewModel, context: Context) {
                 valueLabel = "亮屏",
                 highlightLastAsToday = false,
                 hourAxis = true,
-                subtitle = if (hourlyPeakHour >= 0 && (hourly?.getOrNull(hourlyPeakHour) ?: 0L) > 0)
-                    "用得最多的是 ${hourlyPeakHour}–${hourlyPeakHour + 1}点"
+                subtitle = if (hourlyPeakIndex >= 0)
+                    "用得最多的是 ${hourlyData[hourlyPeakIndex].first}"
                 else "今天还没有亮屏记录"
             )
         }
@@ -729,19 +748,41 @@ private fun ChartCard(
  */
 @Composable
 private fun HourAxis() {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        // 12 根柱子每根代表 2 小时，刻度标到"区间的起点"
-        listOf("0点", "6点", "12点", "18点", "22点").forEach { label ->
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                softWrap = false
-            )
+    // 12 个槽位，每个 2 小时。刻度锚在**对应槽位的中心**上，
+    // 而不是均匀铺开 —— 均匀铺开（SpaceBetween）会让标签与柱子错位：
+    // 第 7 根柱子（12–14点）中心在 54.2% 处，而「12点」被放在 50% 处，
+    // 越往右偏差越大，最后一根柱子的标签直接贴到最右边缘。
+    val anchors = listOf(0, 3, 6, 9, 11)
+    val labels = listOf("0点", "6点", "12点", "18点", "22点")
+
+    Layout(
+        content = {
+            labels.forEach { label ->
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    ) { measurables, constraints ->
+        // 标签按内容自身宽度测量，不参与等分，否则会被压成 25dp 一格而截断
+        val placeables = measurables.map { it.measure(Constraints()) }
+        val width = constraints.maxWidth
+        val height = placeables.maxOfOrNull { it.height } ?: 0
+        layout(width, height) {
+            val step = width.toFloat() / 12f
+            placeables.forEachIndexed { i, placeable ->
+                // 槽位 i 的柱子中心 = (i + 0.5) * step（与 DailyBarChart 的绘制一致）
+                val centerX = (anchors[i] + 0.5f) * step
+                val rawX = (centerX - placeable.width / 2f).roundToInt()
+                // 首尾标签会被推到边界外，夹回容器内（此时标签中心略偏，
+                // 但保证文字完整可见 —— 宁可轻微偏心，也不要截断）
+                val x = rawX.coerceIn(0, (width - placeable.width).coerceAtLeast(0))
+                placeable.place(x, 0)
+            }
         }
     }
 }
