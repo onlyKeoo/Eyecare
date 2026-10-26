@@ -79,41 +79,75 @@ object ScreenTimeStore {
     fun screenOnSecondsBetween(context: Context, from: Long, to: Long): Long? {
         if (to <= from) return 0L
         if (!hasPermission(context)) return null
+        val segments = screenOnSegments(context, from, to) ?: return null
+        // 无事件 = 系统这段没记录到亮/灭变化。返回 null 让上层按"无数据"处理，
+        // 不要用 0 冒充"确认没亮屏"。
+        if (segments.isEmpty()) return null
+        var totalMs = 0L
+        for (seg in segments) totalMs += (seg[1] - seg[0])
+        return totalMs / 1000L
+    }
+
+    /**
+     * 把 [from, to) 内的亮屏区间解析成若干 `[startMs, endMs]` 片段。
+     *
+     * v2.7.5：这是本次修复的核心。原实现逐区间独立扫描事件，
+     * **只要区间内没有事件就返回 null**，于是「连续亮屏跨过整点」时，
+     * 后一个小时查不到任何事件，被上层 `?: 0L` 记成 0 ——
+     * 实测 12:06 亮屏到 14:00，12 点档拿到 54 分钟，13 点档整格丢失。
+     *
+     * 正确做法是在**一个连续区间**内维护亮/灭状态机，并处理两种边界：
+     * - 首个事件是「灭」：说明区间开始时屏幕**已经亮着**（系统不会补发"亮"事件），
+     *   起点回填为 from；
+     * - 首个事件是「亮」：说明区间开始前是灭的，正常起算。
+     *
+     * 拿到片段后，逐小时累加就只是纯算术，不再受事件稀疏影响。
+     *
+     * @return 片段列表；无权限返回 null；区间内无任何事件返回空列表
+     */
+    private fun screenOnSegments(context: Context, from: Long, to: Long): List<LongArray>? {
+        if (to <= from) return emptyList()
+        if (!hasPermission(context)) return null
         val manager = context.getSystemService(Context.USAGE_STATS_SERVICE)
             as? UsageStatsManager ?: return null
 
         val events = manager.queryEvents(from, to)
         val event = UsageEvents.Event()
+        val segments = ArrayList<LongArray>()
 
-        var totalMs = 0L
-        var screenOnAt = 0L
-        var sawAny = false
+        var screenOnAt = -1L
+        var sawFirst = false
 
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
             when (event.eventType) {
                 UsageEvents.Event.SCREEN_INTERACTIVE -> {
-                    sawAny = true
-                    // v2.6.16：区间内首个「亮」事件；若区间开始时屏幕就已经亮着，
-                    // 系统不会补发事件，故下面用 from 作为兜底起点。
-                    if (screenOnAt == 0L) screenOnAt = event.timeStamp
+                    // 首个事件是「亮」→ 区间开始前是灭的
+                    sawFirst = true
+                    if (screenOnAt < 0L) {
+                        screenOnAt = event.timeStamp.coerceIn(from, to)
+                    }
                 }
                 UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
-                    sawAny = true
-                    if (screenOnAt != 0L) {
-                        totalMs += (event.timeStamp - screenOnAt).coerceAtLeast(0L)
-                        screenOnAt = 0L
+                    // 首个事件是「灭」→ 区间开始时屏幕已经亮着，起点回填 from
+                    if (!sawFirst) {
+                        sawFirst = true
+                        if (screenOnAt < 0L) screenOnAt = from
+                    }
+                    if (screenOnAt >= 0L) {
+                        val end = event.timeStamp.coerceIn(from, to)
+                        if (end > screenOnAt) segments.add(longArrayOf(screenOnAt, end))
+                        screenOnAt = -1L
                     }
                 }
             }
         }
 
-        if (!sawAny) return null
-        if (screenOnAt != 0L) {
-            // 区间末尾仍亮着（或查询时正亮）：补到区间终点。
-            totalMs += (to - screenOnAt).coerceAtLeast(0L)
+        // 结尾仍亮着（或查询时正亮）：补到区间终点
+        if (screenOnAt >= 0L && to > screenOnAt) {
+            segments.add(longArrayOf(screenOnAt, to))
         }
-        return totalMs / 1000L
+        return segments
     }
 
     /**
@@ -161,19 +195,62 @@ object ScreenTimeStore {
     ): List<Long>? {
         if (!hasPermission(context)) return null
         val dayStart = dayStartMillis(now)
-        val result = ArrayList<Long>(24)
-        var cursor = dayStart
-        for (h in 0 until 24) {
-            val next = cursor + 3600_000L
-            // 超过"此刻"的小时槽不再查询：未来的时段没有数据，直接记 0，
-            // 避免把 [from, to) 里 to > now 的区间算成"一直亮着"。
-            result.add(
-                if (cursor >= now) 0L
-                else screenOnSecondsBetween(context, cursor, minOf(next, now)) ?: 0L
-            )
-            cursor = next
+        val result = LongArray(24)
+
+        // v2.7.5：全天**只查一次**事件流，再按小时切分。
+        //
+        // 原实现逐小时各查一次（24 次 queryEvents），每次都是独立的事件扫描。
+        // 连续亮屏跨过整点时，后一个小时区间内没有任何事件 → 返回 null → 记 0，
+        // 于是「一次连续亮屏只在包含唤醒事件的那个小时被计入」。
+        // 实测症状：10–14 点几乎全程亮屏，柱状图却只有 10 点档 53 分、12 点档 54 分，
+        // 且这两格之和（107 分）远小于实际亮屏时长。
+        //
+        // 改为一次性拿到 [dayStart, now) 的全部亮屏片段，再逐片段按小时累加。
+        // 切分是纯算术，与事件稀疏程度无关，跨整点不再丢时长。
+        val segments = screenOnSegments(context, dayStart, now) ?: return null
+        splitSegmentsIntoHours(segments, dayStart, result)
+        return result.map { it / 1000L }
+    }
+
+    /**
+     * 把亮屏片段按小时累加进 [result]（毫秒）。
+     *
+     * 抽成独立函数是为了可单测：这段「按小时切分」是 v2.7.5 修复的核心，
+     * 之前 24 次独立查询的写法正是在这里把跨整点的连续亮屏丢掉了。
+     * 纯算术，不依赖 Context / 系统 API。
+     *
+     * @param segments 每项为 `[startMs, endMs]`，须已按时间升序
+     * @param dayStart 当日 0 点时间戳
+     * @param result 长度 24 的累加容器，索引 = 小时
+     */
+    internal fun splitSegmentsIntoHours(
+        segments: List<LongArray>,
+        dayStart: Long,
+        result: LongArray
+    ) {
+        val dayEnd = dayStart + 24 * 3600_000L
+        for (seg in segments) {
+            // v2.7.5：先把片段夹进当天范围再切分。
+            // 若起点早于 dayStart，`(cursor - dayStart) / hour` 的整数除法会向零取整
+            // 得到 0（而不是 -1），于是 0 点这一格会把**前一天**的时长也算进去。
+            // 实际调用中事件查询有边界、不会越界，但这是纯算术函数的固有陷阱，必须夹住。
+            val segStart = seg[0].coerceIn(dayStart, dayEnd)
+            val segEnd = seg[1].coerceIn(dayStart, dayEnd)
+            if (segEnd <= segStart) continue
+            var cursor = segStart
+            while (cursor < segEnd) {
+                val hourIndex = (((cursor - dayStart) / 3600_000L).toInt()).coerceIn(0, 23)
+                val hourEnd = dayStart + (hourIndex + 1) * 3600_000L
+                val sliceEnd = minOf(segEnd, hourEnd)
+                if (sliceEnd > cursor) {
+                    result[hourIndex] += (sliceEnd - cursor)
+                    cursor = sliceEnd
+                } else {
+                    // 防御：理论不可达，避免极端时区/时钟跳变造成死循环
+                    break
+                }
+            }
         }
-        return result
     }
 
     /** 当日 0 点的时间戳 */
