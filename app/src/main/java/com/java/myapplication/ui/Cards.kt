@@ -3,6 +3,7 @@ package com.java.myapplication.ui
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -18,6 +19,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.*
@@ -62,7 +64,11 @@ fun SoftCard(
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .border(
                 width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
+                // v2.7.4：0.18f -> 0.30f。
+                // 实测 0.18 叠在白卡(#FFFFFF)与米白底(#FAF8F5)之间，
+                // 边界对比度约 1.06:1，接近不可见（低亮度屏尤其明显）。
+                // 0.30 提升到约 1.25:1，仍属柔和描边，但卡片的"边界"能看出来了。
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.30f),
                 shape = shape
             )
             .padding(20.dp),
@@ -276,51 +282,43 @@ fun TipCarousel(
         //
         // 现改为「按可用宽度自适应」：先量出容器宽度，再算每点能分到多少，
         // 点宽/间距按比例收缩并设下限，保证整排始终完整落在卡片内。
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val count = tips.size
-            // 每点理想占位（点宽 + 两侧间距）
-            val idealSlot = 22.dp
-            val minDot = 3.dp
-            val minGap = 1.dp
-            val available = maxWidth
-            val slot = if (count > 0) {
-                (available / count).coerceAtMost(idealSlot)
-            } else {
-                idealSlot
-            }
-            // 由可用槽位反推点宽与间距：先保间距，剩下的给点宽；点宽不低于 minDot。
-            // 槽位 = 点宽 + 两侧间距，而激活态要放大到 2.4 倍，所以点宽得留出余量：
-            // 直接按 (slot - 2*gap) / 2.4 反推，保证放大后仍不越过相邻点。
-            val gap = 2.dp.coerceAtMost((slot / 8f).coerceAtLeast(minGap))
-            val dotWidth = ((slot - gap * 2) / 2.4f).coerceAtLeast(minDot)
+        // v2.7.4：窗口化显示，最多 7 个点。
+        //
+        // 原先 19 个点铺满一行（v2.6.17 已改为按宽度自适应收缩），虽然不再溢出，
+        // 但点数一多就退化成「刻度尺」：既看不清当前在哪，也点不中。
+        // 而且左侧已经有「4/17」这段文本，点阵和它是同一件事的两种表达。
+        //
+        // 现在只渲染「当前项前后各 3 个」的滑动窗口，激活点始终在窗口中央附近；
+        // 首尾处窗口贴边，保证不出现空缺。
+        val count = tips.size
+        val windowSize = 7
+        val halfWindow = windowSize / 2
+        val windowStart = (index - halfWindow).coerceIn(0, (count - windowSize).coerceAtLeast(0))
+        val windowEnd = (windowStart + windowSize).coerceAtMost(count)
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                repeat(count) { i ->
-                    val active = i == index
-                    val dotScale by animateFloatAsState(
-                        targetValue = if (active) 2.4f else 1f,
-                        animationSpec = tween(MotionDurations.ENTER_MS, easing = EaseOutStrong),
-                        label = "dotScale"
-                    )
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = gap)
-                            .height(6.dp)
-                            .width(dotWidth)
-                            // 基础宽 = dotWidth（已按可用宽度收缩），再乘 1→2.4 的
-                            // 绘制缩放表示激活。槽位留了 2.4 倍余量，放大不会越界。
-                            .graphicsLayer { scaleX = dotScale }
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(
-                                if (active) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
-                            )
-                    )
-                }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            for (i in windowStart until windowEnd) {
+                val active = i == index
+                val dotWidth by animateDpAsState(
+                    targetValue = if (active) 18.dp else 6.dp,
+                    animationSpec = tween(MotionDurations.ENTER_MS, easing = EaseOutStrong),
+                    label = "dotWidth"
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 3.dp)
+                        .height(6.dp)
+                        .width(dotWidth)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(
+                            if (active) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
+                        )
+                )
             }
         }
     }
@@ -472,30 +470,35 @@ fun TodayWorkSummaryCard(
 
         Spacer(Modifier.height(12.dp))
 
-        Row(modifier = Modifier.fillMaxWidth()) {
-            StatItem(
-                // 未授权时主数字位留占位，不留一个可能是错的自统计值
-                value = screenOnSeconds?.let { formatDurationShort(it.toInt()) } ?: "--",
-                label = "亮屏时长",
-                // v2.7.2：主指标给更多权重（1.5 : 1 : 1）。
-                // 原先三等分，把「亮屏时长」这个主指标和两个次要指标拉成同一视觉重量。
-                modifier = Modifier.weight(1.5f)
-            )
-            StatItem(
-                value = "${restCount}次",
-                label = "休息次数",
-                modifier = Modifier.weight(1f)
-            )
-            // v2.7.1：补上休息时长。日档位不再画柱状图（单日数据没有横向比较的
-            // 意义），休息侧的信息全靠这张卡承载，因此「次数」与「时长」都展示。
-            StatItem(
-                value = formatDurationShort(restSeconds),
-                label = "休息时长",
-                modifier = Modifier.weight(1f)
-            )
-        }
-
+        // v2.7.4：授权态与未授权态分成两套完整布局。
+        //
+        // 原先只有「进度条 + 口径」这段跟着授权状态走，上方三列统计恒定渲染，
+        // 于是未授权时卡片呈现为「4小时10分」旁边接「--」再接「1分」——
+        // 一半有数、一半占位，看起来像渲染失败而不是"需要授权"。
+        // 现在未授权时整块替换为空态，不再有孤零零的占位符。
         if (screenOnSeconds != null) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                StatItem(
+                    value = formatDurationShort(screenOnSeconds.toInt()),
+                    label = "亮屏时长",
+                    // v2.7.2：主指标给更多权重（1.5 : 1 : 1）。
+                    // 原先三等分，把「亮屏时长」这个主指标和两个次要指标拉成同一视觉重量。
+                    modifier = Modifier.weight(1.5f)
+                )
+                StatItem(
+                    value = "${restCount}次",
+                    label = "休息次数",
+                    modifier = Modifier.weight(1f)
+                )
+                // v2.7.1：补上休息时长。日档位不再画柱状图（单日数据没有横向比较的
+                // 意义），休息侧的信息全靠这张卡承载，因此「次数」与「时长」都展示。
+                StatItem(
+                    value = formatDurationShort(restSeconds),
+                    label = "休息时长",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
             Spacer(Modifier.height(14.dp))
 
             LinearProgressIndicator(
@@ -545,28 +548,49 @@ fun TodayWorkSummaryCard(
                     maxLines = 1
                 )
             }
-        } else if (onRequestScreenTime != null) {
-            Spacer(Modifier.height(8.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "开启「使用情况访问」后即可显示",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
+        } else {
+            // ============ 未授权空态 ============
+            //
+            // 设计意图：
+            // 1. 先说清「缺什么、为什么需要」，而不是只丢一句"去开启"；
+            // 2. 主行动按钮只在这里出现一次，不复用页面级主色按钮的样式权重；
+            // 3. 「休息次数 / 休息时长」是 App 自己记账得到的、**不依赖授权**，
+            //    因此仍然展示 —— 但降为一行脚注，避免和上面的大数字抢注意力。
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = EyeIcons.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                    modifier = Modifier.size(16.dp)
                 )
-                TextButton(
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "开启「使用情况访问」后，可统计今日亮屏时长与目标进度",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 18.sp
+                )
+            }
+
+            if (onRequestScreenTime != null) {
+                Spacer(Modifier.height(12.dp))
+                Button(
                     onClick = onRequestScreenTime,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp)
                 ) {
-                    Text("去开启", style = MaterialTheme.typography.labelMedium)
+                    Text("去开启", fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 }
             }
+
+            Spacer(Modifier.height(14.dp))
+
+            // 不依赖授权、始终可信的两个数
+            Text(
+                "今天已休息 ${restCount} 次 · 共 ${formatDurationShort(restSeconds)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
         }
     }
 }
