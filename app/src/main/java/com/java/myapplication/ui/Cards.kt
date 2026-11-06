@@ -87,16 +87,13 @@ fun EyeCareSwitchCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // v2.7.7（去冗余）：删掉「已开启，按时守护你的双眼 / 已关闭，暂时不提醒」。
+            // 开关本身就是状态的唯一表达，再加一句话是同义反复。
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "用眼提醒",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    if (enabled) "已开启，按时守护你的双眼" else "已关闭，暂时不提醒",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Switch(
@@ -173,23 +170,15 @@ fun TipCarousel(
     LaunchedEffect(index) { userDriven = false }
 
     SoftCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "护眼小知识",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                "${index + 1}/${tips.size}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        // v2.7.7（去冗余）：删掉右侧「1/19」页码 —— 卡片底部已有圆点指示器，
+        // 两者是同一件事的两种表达。页码一走，这一行只剩标题，
+        // 原来的 Row 容器也随之失去意义（单子元素的 Row 只是白占一层布局）。
+        Text(
+            "护眼小知识",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium
+        )
 
         Spacer(Modifier.height(10.dp))
 
@@ -525,29 +514,11 @@ fun TodayWorkSummaryCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(Modifier.height(6.dp))
-
-            // v2.7.3：口径说明降权。
+            // v2.7.7（去冗余）：删掉「口径：系统亮屏时长，含亮屏未用眼时段」脚注。
             //
-            // 原先它是 12sp 的独立段落 + 分隔线 + 上下各 8dp，视觉重量
-            // 甚至超过「休息次数」这样的真实数据——而它只是一条免责说明。
-            // 现在改为「ⓘ + 单行小字 + 最浅的提示色」，去掉分隔线，
-            // 让它退到卡片最底部做一个安静的脚注。
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = EyeIcons.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(12.dp)
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    "口径：系统亮屏时长，含亮屏未用眼时段",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
-                    maxLines = 1
-                )
-            }
+            // 它是一句统计口径的免责说明，不承载任何用户要执行的动作，
+            // 也不改变读数含义——用户看「亮屏时长」就是系统亮屏时长。
+            // 真需要追溯口径时，README 与代码注释里都有完整说明。
         } else {
             // ============ 未授权空态 ============
             //

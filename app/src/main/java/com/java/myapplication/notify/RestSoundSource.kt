@@ -20,50 +20,46 @@ enum class RestSoundSource(
     /** 设置页展示名 */
     val label: String,
     /** 内置音频资源；null = 使用系统通知铃声 */
-    @param:RawRes val rawRes: Int?,
-    /** 一行说明，讲清这个音源的特点（尤其会不会"两声"） */
-    val hint: String
+    @param:RawRes val rawRes: Int?
+    // v2.7.10：删除 hint 字段。
+    // 设置页改为「选项名 + 试听」后，这 6 条文字说明已无任何引用；
+    // 留着会让人以为它们在界面上生效，实际早就不显示了。
+    // 音色判断交给试听按钮，比文字转述准确。
 ) {
     /** 跟随系统「通知铃声」—— 默认。注意系统铃声可能是多脉冲的（会听到两声） */
     SYSTEM_RINGTONE(
         label = "跟随系统通知铃声",
-        rawRes = null,
-        hint = "使用系统设置里的通知铃声；若该铃声本身是多音（如水滴声），会听到两声"
+        rawRes = null
     ),
 
     /** 内置 · 清音：最接近 v2.3.11 的默认音，单声、清亮 */
     BUILTIN_CLEAR(
         label = "内置 · 清音",
-        rawRes = R.raw.rest_end_chime,
-        hint = "单声、清亮，就是 v2.3.11 的默认音"
+        rawRes = R.raw.rest_end_chime
     ),
 
     /** 内置 · 柔音：中音、衰减稍慢 */
     BUILTIN_SOFT(
         label = "内置 · 柔音",
-        rawRes = R.raw.rest_end_soft,
-        hint = "单声、中音、柔和"
+        rawRes = R.raw.rest_end_soft
     ),
 
     /** 内置 · 沉音：低音、更长 */
     BUILTIN_LOW(
         label = "内置 · 沉音",
-        rawRes = R.raw.rest_end_low,
-        hint = "单声、低音、更沉"
+        rawRes = R.raw.rest_end_low
     ),
 
     /** 内置 · 上行双音：嘀-嗒 上扬，类系统铃声（**含两个音**） */
     BUILTIN_RISE(
         label = "内置 · 上行双音",
-        rawRes = R.raw.rest_end_rise,
-        hint = "「嘀-嗒」上扬两个音（刻意做成两声）"
+        rawRes = R.raw.rest_end_rise
     ),
 
     /** 内置 · 下行双音：嗒-嘀 下坠（**含两个音**） */
     BUILTIN_FALL(
         label = "内置 · 下行双音",
-        rawRes = R.raw.rest_end_fall,
-        hint = "「嗒-嘀」下坠两个音（刻意做成两声）"
+        rawRes = R.raw.rest_end_fall
     );
 
     companion object {

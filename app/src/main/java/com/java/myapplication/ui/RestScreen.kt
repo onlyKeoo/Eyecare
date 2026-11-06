@@ -149,8 +149,11 @@ fun RestScreen(viewModel: EyeCareViewModel, context: Context) {
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // v2.7.7（去冗余）：去掉「🌿 」emoji 前缀。
+                // emoji 走系统彩色字体，字重与基线都和相邻文字对不上，
+                // 而它在这里不区分任何东西——只是给标签加了个装饰。
                 Text(
-                    "🌿 护眼知识",
+                    "护眼知识",
                     style = MaterialTheme.typography.labelMedium,
                     color = accentColor,
                     fontWeight = FontWeight.Medium

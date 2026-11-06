@@ -168,7 +168,10 @@ fun SettingsTab(
         SettingsGroupCard(title = "提醒") {
             SwitchSettingRow(
                 title = "到点自动全屏",
-                subtitle = "用眼到点时直接弹出全屏休息页（后台也不会漏）；关闭则只发通知横幅",
+                // v2.7.8：原副标题「用眼到点时直接弹出全屏休息页（后台也不会漏）；
+                // 关闭则只发通知横幅」前半句只是把标题换个说法重讲。
+                // 只留下「关闭会怎样」——这是开关的后果，不看就猜不到。
+                subtitle = "关闭后只发通知横幅，不弹全屏",
                 checked = s.autoFullScreen,
                 // 关闭 → 直接生效；开启 → 先弹二次确认（明确告知会打断其他应用）
                 onChecked = { v ->
@@ -212,9 +215,10 @@ fun SettingsTab(
                 }
             }
             Spacer(Modifier.height(16.dp))
+            // v2.7.7（去冗余）：删掉副标题「休息结束时由应用响一声」——
+            // 标题「休息结束提示音」已经完整表达了这个开关做什么。
             SwitchSettingRow(
                 title = "休息结束提示音",
-                subtitle = "休息结束时由应用响一声",
                 checked = s.restEndSoundEnabled,
                 onChecked = { v ->
                     update({ it.copy(restEndSoundEnabled = v) }, if (v) "休息结束提示音已开启" else "休息结束提示音已关闭")
@@ -222,9 +226,10 @@ fun SettingsTab(
             )
             if (s.restEndSoundEnabled) {
                 Spacer(Modifier.height(16.dp))
+                // v2.7.8：删掉副标题「提示音响起时短振动一下，手机扣在桌上也能察觉」。
+                // 开关在「休息结束提示音」之下，「同时」的含义已由位置交代。
                 SwitchSettingRow(
                     title = "同时振动",
-                    subtitle = "提示音响起时短振动一下，手机扣在桌上也能察觉",
                     checked = s.restEndSoundVibrate,
                     onChecked = { v ->
                         update({ it.copy(restEndSoundVibrate = v) }, if (v) "已开启同时振动" else "已关闭同时振动")
@@ -244,7 +249,9 @@ fun SettingsTab(
         SettingsGroupCard(title = "久坐") {
             SwitchSettingRow(
                 title = "久坐提醒",
-                subtitle = "按间隔提醒起身活动，与用眼提醒独立计时",
+                // v2.7.8：删掉「按间隔提醒起身活动」（标题已说明），
+                // 只留「与用眼提醒独立计时」——不知道这点会以为改一个影响另一个。
+                subtitle = "与用眼提醒独立计时",
                 checked = s.sitReminderEnabled,
                 onChecked = { v ->
                     update({ it.copy(sitReminderEnabled = v) }, if (v) "久坐提醒已开启" else "久坐提醒已关闭")
@@ -281,7 +288,8 @@ fun SettingsTab(
         SettingsGroupCard(title = "外观") {
             SwitchSettingRow(
                 title = "自动夜间模式",
-                subtitle = "跟随系统深色状态自动切换护眼配色",
+                // v2.7.8：「自动」已在标题里，副标题只交代它跟随什么。
+                subtitle = "跟随系统深色设置",
                 checked = s.autoNightMode,
                 onChecked = { v ->
                     update({ it.copy(autoNightMode = v) }, if (v) "已开启自动夜间模式" else "已关闭自动夜间模式")
@@ -299,8 +307,10 @@ fun SettingsTab(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(Modifier.height(4.dp))
+            // v2.7.8：原句把五项检查逐一列出（通知权限、精确闹钟、悬浮窗、
+            // 电池优化、自启动），但点进去的面板本身就是这张清单 —— 等于目录抄了一遍正文。
             Text(
-                "如果提醒不准时，按清单逐项检查通知权限、精确闹钟、悬浮窗（后台全屏）、电池优化与自启动",
+                "提醒不准时时，逐项检查系统权限与电池设置",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1038,27 +1048,26 @@ private fun SoundSourceSetting(
             Text("试听", color = MaterialTheme.colorScheme.primary)
         }
     }
-    Spacer(Modifier.height(8.dp))
-    Text(
-        text = current.hint,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    Spacer(Modifier.height(4.dp))
-    Text(
-        text = "音量跟随系统「通知音量」。静音 / 勿扰时会安静，只留通知与振动。",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
+    // v2.7.10：整个音源说明区块删除（原为音源 hint + 音量说明两行）。
+    //
+    // 理由：音源卡片已经有「选项名 + 试听按钮」，用户选哪个、像不像，
+    // 点一下试听是最直接的判断方式，比读一行「单声，清亮」更准。
+    // 说明文字只是在替声音做文字转述，删掉不影响选择。
 }
 
-/** 开关行：左标题+副标题，右开关 */
+/**
+ * 开关行：左标题（+可选副标题），右开关。
+ *
+ * v2.7.7：[subtitle] 改为可空。原来必填，于是每个开关都被迫配一句说明，
+ * 其中有些（如「休息结束时由应用响一声」）只是把标题换个说法重讲一遍。
+ * 现在只有真正补充信息（默认值、后果、适用场景）的才写副标题。
+ */
 @Composable
 private fun SwitchSettingRow(
     title: String,
-    subtitle: String,
     checked: Boolean,
-    onChecked: (Boolean) -> Unit
+    onChecked: (Boolean) -> Unit,
+    subtitle: String? = null
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1070,11 +1079,13 @@ private fun SwitchSettingRow(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         Spacer(Modifier.width(8.dp))
         Switch(
@@ -1115,12 +1126,8 @@ private fun AboutCard() {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            "开源项目 · 欢迎查看源码与反馈问题",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // v2.7.7（去冗余）：删掉「开源项目 · 欢迎查看源码与反馈问题」。
+        // 下面紧接着就是仓库地址与「打开仓库」按钮，这句只是把同一件事说第三遍。
         Spacer(Modifier.height(8.dp))
         // 纯文本地址：便于长按复制（部分用户不方便直接跳转）
         Text(

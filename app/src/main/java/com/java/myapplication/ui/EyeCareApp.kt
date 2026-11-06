@@ -280,11 +280,6 @@ private fun TimerTab(
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onBackground
             )
-            Text(
-                "给眼睛一片呼吸的原野",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
 
         Spacer(Modifier.height(20.dp))
@@ -297,33 +292,14 @@ private fun TimerTab(
         ) {
             Column {
                 SoftCard {
-                    // v2.6.20：原标题写作「🌙 免打扰时段进行中」。emoji 走系统彩色字体，
-                    // 与 titleSmall 的基线、字重都不一致，是自检页那类「不齐」的同源问题。
-                    // 这里不另加图标，改用左侧一道竖向色条标记「静音中」——比再塞一个
-                    // 图形更克制，也避免每张卡片都顶一个图标导致的重复。
-                    Row {
-                        Box(
-                            Modifier
-                                .width(3.dp)
-                                .height(38.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(MaterialTheme.colorScheme.tertiary)
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                "免打扰时段进行中",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "这段时间只为你计时，不会打扰你。出时段后自动恢复提醒。",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    // v2.7.7（去冗余）：删掉左侧装饰竖条与下方解释句。
+                    // 竖条只是「静音中」的第二种表达，标题已经说清楚了；
+                    // 解释句描述的是免打扰的默认行为，设置页开关旁已有说明。
+                    Text(
+                        "免打扰时段进行中",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
                 Spacer(Modifier.height(20.dp))
             }
@@ -408,15 +384,9 @@ private fun TimerTab(
             else MaterialTheme.colorScheme.primary
         )
 
-        Spacer(Modifier.height(6.dp))
-
-        Text(
-            // 只描述"本轮周期"，不再出现「目标」二字 ——
-            // 那个词在设置页专指每日用眼目标，两处混用会让用户误读环的含义。
-            viewModel.cycleCaption,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // v2.7.7（去冗余）：删掉原来的「本轮 20分钟 · 每次休息 20秒」一行。
+        // 这两个数就是设置页「计时」组里的两个值，环上方也已给出倒计时，
+        // 三处说同一件事。环下只保留一行真正的行动信息（还差多久）。
 
         Spacer(Modifier.height(20.dp))
 
@@ -521,18 +491,6 @@ private fun ReportTab(viewModel: EyeCareViewModel, context: Context) {
             "${startHour}–${endHour}点" to (pair.sum() / 60).toInt()
         }
     }
-    // v2.7.5：峰值改为在**合并后的 12 根柱子**上找，与图表实际展示的口径一致。
-    // 原先在 24 个小时里找峰值，再拿那个单小时下标去拼「13–14点」的文案，
-    // 既与 2 小时分组对不上，也会出现「峰值 13 点」但 13 点那格其实属于 12–14 组的错位。
-    val hourlyPeakIndex = remember(hourlyData) {
-        var peak = -1
-        var peakMin = 0
-        hourlyData.forEachIndexed { i, entry ->
-            if (entry.second > peakMin) { peakMin = entry.second; peak = i }
-        }
-        peak
-    }
-
     // 休息次数仍走自统计（这条链路由休息完成事件直接触发，没有虚高问题）。
     val stats = remember(range, statsKey) {
         StatsStore.dailySeries(context, range.days)
@@ -626,24 +584,17 @@ private fun ReportTab(viewModel: EyeCareViewModel, context: Context) {
             // v2.7.3：日档位的分时图，替代原来的整段空白。
             ChartCard(
                 title = "今日分时亮屏",
-                legendColor = GrassGreen,
-                legendText = "亮屏(分钟)",
                 data = hourlyData,
                 stats = stats,
                 valueLabel = "亮屏",
                 highlightLastAsToday = false,
-                hourAxis = true,
-                subtitle = if (hourlyPeakIndex >= 0)
-                    "用得最多的是 ${hourlyData[hourlyPeakIndex].first}"
-                else "今天还没有亮屏记录"
+                hourAxis = true
             )
         }
 
         if (range != ReportRange.DAY) {
             ChartCard(
                 title = "每日亮屏时长",
-                legendColor = GrassGreen,
-                legendText = "亮屏(分钟)",
                 data = workData,
                 stats = stats
             )
@@ -652,8 +603,6 @@ private fun ReportTab(viewModel: EyeCareViewModel, context: Context) {
 
             ChartCard(
                 title = "每日休息时长",
-                legendColor = MistBlue,
-                legendText = "休息(分钟)",
                 data = restData,
                 stats = stats,
                 valueLabel = "休息",
@@ -679,15 +628,12 @@ private fun ReportTab(viewModel: EyeCareViewModel, context: Context) {
 @Composable
 private fun ChartCard(
     title: String,
-    legendColor: androidx.compose.ui.graphics.Color,
-    legendText: String,
     data: List<Pair<String, Int>>,
     stats: List<com.java.myapplication.data.DailyStat>,
     barColor: androidx.compose.ui.graphics.Color = GrassGreen,
     emptyColor: androidx.compose.ui.graphics.Color = GrassGreen,
     valueLabel: String = "亮屏",
     highlightLastAsToday: Boolean = true,
-    subtitle: String? = null,
     // v2.7.3：日档位横轴是「小时」而非「日期」。
     // DateAxis 依赖 DailyStat.dayKey 取标签，分时图没有 dayKey，
     // 且 24 根柱子若只显示一个日期刻度会完全看不出横轴含义。
@@ -701,23 +647,13 @@ private fun ChartCard(
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
-        Spacer(Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            LegendDot(color = legendColor, text = legendText)
-            if (subtitle != null) {
-                // 副标题与图例同行右对齐：它是对数据的一句话解读，
-                // 不是标题的一部分，放标题下会抢占视觉层级。
-                androidx.compose.foundation.layout.Spacer(
-                    Modifier.weight(1f)
-                )
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
-            }
-        }
+        // v2.7.7（去冗余）：删掉整行「图例圆点 + 亮屏(分钟)」与右侧「用得最多的是…」。
+        //
+        // - 图例：标题已写明是「亮屏」还是「休息」，柱子只有一种颜色，
+        //   圆点不区分任何东西；单位「分钟」在点柱子的读数里也有。
+        // - 副标题：柱子高度本身就在表达「哪个时段最多」，
+        //   再写一句是把同一结论说第二遍。
+        // 这一整行连同它的 Row 容器一起删掉，标题下直接接图表。
         Spacer(Modifier.height(16.dp))
         DailyBarChart(
             data = data,
@@ -784,24 +720,6 @@ private fun HourAxis() {
                 placeable.place(x, 0)
             }
         }
-    }
-}
-
-@Composable
-private fun LegendDot(color: androidx.compose.ui.graphics.Color, text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(color)
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 
