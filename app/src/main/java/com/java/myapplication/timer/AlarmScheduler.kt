@@ -47,18 +47,22 @@ object AlarmScheduler {
     }
 
     fun cancelOverdueReminder(context: Context) {
+        TimerTrace.alarm("cancel", detail = ACTION_OVERDUE)
         alarmManager(context).cancel(pendingIntent(context, ACTION_OVERDUE, REQUEST_OVERDUE))
     }
 
     fun cancelWorkAlarm(context: Context) {
+        TimerTrace.alarm("cancel", detail = ACTION_WORK_DONE)
         alarmManager(context).cancel(pendingIntent(context, ACTION_WORK_DONE, REQUEST_WORK))
     }
 
     fun cancelRestAlarm(context: Context) {
+        TimerTrace.alarm("cancel", detail = ACTION_REST_DONE)
         alarmManager(context).cancel(pendingIntent(context, ACTION_REST_DONE, REQUEST_REST))
     }
 
     fun cancelSitAlarm(context: Context) {
+        TimerTrace.alarm("cancel", detail = ACTION_SIT_DONE)
         alarmManager(context).cancel(pendingIntent(context, ACTION_SIT_DONE, REQUEST_SIT))
     }
 
@@ -96,6 +100,7 @@ object AlarmScheduler {
     }
 
     private fun setAlarm(context: Context, triggerAt: Long, pi: PendingIntent) {
+        TimerTrace.alarm("schedule", triggerAt, "inMs=${triggerAt - System.currentTimeMillis()}")
         val am = alarmManager(context)
         val canExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             am.canScheduleExactAlarms()

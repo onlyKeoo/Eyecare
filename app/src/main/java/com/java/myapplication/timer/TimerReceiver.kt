@@ -18,6 +18,7 @@ import com.java.myapplication.ui.DndWindow
 class TimerReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        TimerTrace.event("alarm broadcast action=${intent.action}")
         when (intent.action) {
             AlarmScheduler.ACTION_WORK_DONE -> {
                 // 双重确认提醒仍开启（开关切换与闹钟到期可能存在竞态）

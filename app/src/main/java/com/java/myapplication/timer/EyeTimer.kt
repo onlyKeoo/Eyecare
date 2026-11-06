@@ -138,6 +138,7 @@ object EyeTimer {
         // 用比例：有效用眼 = 该墙钟子区间占整段墙钟跨度的比例 × 当前累计。
         val todayStart = dayStartOf(at)
         val curAccum = accumulatedAt(s, at, isScreenOn(context))
+        TimerTrace.event("rollOver dayChanged segStart=$segStart at=$at curAccum=$curAccum screenOn=${isScreenOn(context)}")
         val fullSpan = (at - segStart).coerceAtLeast(1L)
         val beforeSpan = (todayStart - segStart).coerceIn(0L, fullSpan)
         val beforeMs = (curAccum.toDouble() * (beforeSpan.toDouble() / fullSpan.toDouble())).toLong()
@@ -317,14 +318,22 @@ object EyeTimer {
      *   并作废「到点未休息」的超时态；短于阈值则续算剩余时间。
      */
     fun onScreenOn(context: Context) {
+        TimerTrace.event("onScreenOn enter interactive=${isScreenOn(context)}")
         // v2.6.17：**先消费边沿标记**，再做任何可能提前 return 的判断。
         // 否则 `!reminderEnabled` / `phaseResting` 的提前返回会让标记残留到
         // 下一次调用，把一次无关的亮屏误判成「前置过息屏」。
         // 消费后的值以局部变量贯穿本函数，语义清晰且不受后续分支影响。
         val cameFromScreenOff = consumeScreenOnEdge()
         var s = TimerStore.load(context)
-        if (!s.reminderEnabled) return
-        if (s.phaseResting) return
+        TimerTrace.state("onScreenOn edge=$cameFromScreenOff", s)
+        if (!s.reminderEnabled) {
+            TimerTrace.event("onScreenOn return reason=reminderDisabled")
+            return
+        }
+        if (s.phaseResting) {
+            TimerTrace.event("onScreenOn return reason=phaseResting")
+            return
+        }
         // 跨天：亮屏时先把昨天那段结算掉、今天从 0 重新累计
         s = rollOverIfDayChanged(context, s, now()).also { if (it !== s) TimerStore.save(context, it) }
 
@@ -424,6 +433,7 @@ object EyeTimer {
         //   leftLong           —— 本次息屏时长达到阈值；
         //   cameFromScreenOff  —— 确实发生过「息屏→亮屏」跃变（排除切后台返回）。
         val leftThisScreen = leftLong && cameFromScreenOff
+        TimerTrace.event("onScreenOn decision now=$t leftLong=$leftLong edge=$cameFromScreenOff leftThisScreen=$leftThisScreen")
 
         // 「从未起算过」的兜底。
         //
@@ -441,16 +451,20 @@ object EyeTimer {
         // 「已有段」，不得重复开新段。
         val noActiveSegment = s.screenOnAt <= 0 && s.workAccumMs <= 0L
 
+        TimerTrace.event("onScreenOn decision noActive=$noActiveSegment accum=${s.workAccumMs} onAt=${s.screenOnAt}")
         if (leftThisScreen || noActiveSegment) {
+            TimerTrace.event("onScreenOn action=resetToFreshCycle")
             resetToFreshCycle(context, t)
             return
         }
 
         val workMs = workMs(context)
         val elapsed = elapsedMs(context)
+        TimerTrace.event("onScreenOn elapsed=$elapsed workMs=$workMs")
 
         // 已到点却还没提醒（例如息屏期间到点被冻结）：立刻补提醒
         if (elapsed >= workMs) {
+            TimerTrace.event("onScreenOn action=onWorkDeadline reason=elapsedAtOrAboveTarget")
             onWorkDeadline(context, notify = true)
             return
         }
@@ -488,6 +502,7 @@ object EyeTimer {
      * 会撤销到点 / 超时闹钟，并按需重排新的到点闹钟（由调用方屏幕状态决定）。
      */
     private fun resetToFreshCycle(context: Context, t: Long) {
+        TimerTrace.event("resetToFreshCycle at=$t")
         // v2.6.12：也要开新段（段序号 +1、基准归零），否则上一段的
         // recordedAccumMs 会在新段里被当成「已结算」而把新段整段漏记。
         val prev = TimerStore.load(context)
@@ -516,10 +531,13 @@ object EyeTimer {
      * 息屏时长决定「续算」还是「清零重算」，从根本上杜绝息屏后亮屏误弹超时。
      */
     fun onScreenOff(context: Context) {
+        TimerTrace.event("onScreenOff enter interactive=${isScreenOn(context)}")
         // 记录真实息屏边沿：后续 onScreenOn 可据此区分「真的离开过」与「切后台返回」
         sawScreenOff = true
         val s = TimerStore.load(context)
+        TimerTrace.state("onScreenOff", s)
         if (!s.reminderEnabled) {
+            TimerTrace.event("onScreenOff return reason=reminderDisabled")
             AlarmScheduler.cancelAll(context)
             return
         }
@@ -589,6 +607,7 @@ object EyeTimer {
 
     /** 进程启动时同步一次真实屏幕状态（挂在 Application.onCreate） */
     fun syncScreenState(context: Context) {
+        TimerTrace.event("syncScreenState interactive=${isScreenOn(context)}")
         if (isScreenOn(context)) {
             onScreenOn(context)
         } else {
@@ -605,7 +624,9 @@ object EyeTimer {
      * @param notify false 时只切换到「等待休息」状态而不发通知
      */
     fun onWorkDeadline(context: Context, notify: Boolean = true) {
+        TimerTrace.event("onWorkDeadline enter notify=$notify interactive=${isScreenOn(context)}")
         var s = TimerStore.load(context)
+        TimerTrace.state("onWorkDeadline", s)
         if (!s.reminderEnabled) return
         if (s.phaseResting) return
         if (s.awaitingRest) return
@@ -619,6 +640,7 @@ object EyeTimer {
         // resync 亮屏、闹钟并发），判据与随后结算用的累计就会来自不同的快照，
         // 正是「亮屏瞬间误判已到点」的来源。
         val elapsed = accumulatedAt(s, t, isScreenOn(context))
+        TimerTrace.event("onWorkDeadline decision elapsed=$elapsed workMs=$workMs")
 
         if (elapsed < workMs) {
             // 提前触发（如兜底闹钟）：重排到真正到点
@@ -930,7 +952,9 @@ object EyeTimer {
      * 应用冷启动、回到前台、设备重启后调用。
      */
     fun resync(context: Context, notifyMissed: Boolean) {
+        TimerTrace.event("resync enter notifyMissed=$notifyMissed interactive=${isScreenOn(context)}")
         var s = TimerStore.load(context)
+        TimerTrace.state("resync", s)
         if (!s.reminderEnabled) {
             RestNotifier.cancelReminder(context)
             TimerStore.save(context, TimerState(reminderEnabled = false))
@@ -942,7 +966,11 @@ object EyeTimer {
         // 跨天：自愈前先把昨天那段归零结算
         run {
             val rolled = rollOverIfDayChanged(context, s, t)
-            if (rolled !== s) { TimerStore.save(context, rolled); s = rolled }
+            if (rolled !== s) {
+                TimerTrace.state("resync rollover", rolled)
+                TimerStore.save(context, rolled)
+                s = rolled
+            }
         }
         val workMs = workMs(context)
         val restMs = restMs(context)

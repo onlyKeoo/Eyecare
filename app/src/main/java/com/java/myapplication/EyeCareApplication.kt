@@ -21,6 +21,8 @@ class EyeCareApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.java.myapplication.timer.TimerTrace.init(this)
+        com.java.myapplication.timer.TimerTrace.event("Application.onCreate")
 
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)

@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -87,6 +88,9 @@ fun DiagnosticsPanel(onDismiss: () -> Unit) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(Modifier.height(4.dp))
+                // 诊断日志操作区（v2.7.6）：导出给不接电脑的用户 + 清空重录
+                LogActions(refreshTick, onChanged = { refreshTick++ })
             }
         },
         confirmButton = {
@@ -96,6 +100,89 @@ fun DiagnosticsPanel(onDismiss: () -> Unit) {
             TextButton(onClick = { refreshTick++ }) { Text("重新检测") }
         }
     )
+}
+
+/**
+ * 诊断日志操作区（v2.7.6 诊断版）。
+ *
+ * 为什么放在自检面板里：维护者不接电脑、也不会用命令行，
+ * 日志必须能在手机上一键取出。放在「提醒可靠性自检」里，
+ * 是因为它本身就是排查提醒问题的一部分，不需要新增入口。
+ *
+ * 清空做成二次确认：日志是复现问题的唯一证据，
+ * 误点一次就得再等一天才能重新采集。
+ */
+@Composable
+private fun LogActions(refreshTick: Int, onChanged: () -> Unit) {
+    val context = LocalContext.current
+    val lines = remember(refreshTick) { com.java.myapplication.timer.TimerTrace.lineCount(context) }
+    var confirmClear by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            if (lines > 0) "诊断日志：已记录 $lines 行"
+            else "诊断日志：暂无记录",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        OutlinedButton(
+            onClick = {
+                val text = com.java.myapplication.timer.TimerTrace.exportText(context)
+                val share = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, "护眼时光诊断日志")
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                try {
+                    context.startActivity(Intent.createChooser(share, "分享诊断日志"))
+                } catch (_: Exception) {
+                    Toast.makeText(context, "暂时无法打开分享菜单", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("分享诊断日志")
+        }
+        TextButton(
+            onClick = { confirmClear = true },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                "清空诊断日志",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("清空诊断日志？") },
+            text = {
+                Text(
+                    "将删除已记录的全部诊断日志，且无法恢复。\n\n" +
+                        "如果日志里已经包含问题复现的记录，建议先「分享」保存一份再清空。"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClear = false
+                    val ok = com.java.myapplication.timer.TimerTrace.clear(context)
+                    Toast.makeText(
+                        context,
+                        if (ok) "诊断日志已清空" else "清空失败，请重试",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    onChanged()
+                }) {
+                    Text("清空", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClear = false }) { Text("取消") }
+            }
+        )
+    }
 }
 
 @Composable

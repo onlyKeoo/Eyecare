@@ -31,6 +31,7 @@ import android.content.Intent
 class ScreenStateReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        TimerTrace.event("broadcast action=${intent.action}")
         when {
             // 两者都要触发 onScreenOn：USER_PRESENT 只在「解锁」时发，
             // SCREEN_ON 覆盖面更广（未锁屏的亮屏只有它）。幂等由 consumeScreenOnEdge 保证。
