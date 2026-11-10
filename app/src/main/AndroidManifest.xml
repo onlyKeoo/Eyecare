@@ -17,6 +17,27 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- 休息结束提示音的短振动（v2.3.8 新增）。普通权限，安装即授予，不弹框 -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 休息结束后回到原应用（v2.8.8）：需要解析任意第三方应用的启动入口。
+         HyperOS 实测：仅声明 <queries><intent> 不会授予包可见性
+         （dumpsys package 中 `queries via package name:` 为空），
+         导致 resolveActivity / getLaunchIntentForPackage 对目标应用返回 null，
+         表现为 ActivityNotFoundException。
+         本权限仅用于「读取目标应用的启动组件名」，不做应用列表展示、不上传数据。
+         注意：Google Play 对声明该权限的应用有审核要求；本项目不分发至 Play。 -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+    <!-- 休息结束后回到原应用（v2.8.5）：需要解析目标应用的启动入口。
+         Android 11+ 的包可见性规则会过滤未声明的应用，导致
+         getLaunchIntentForPackage / resolveActivity 对微信、QQ 等返回 null。
+         声明 LAUNCHER 意图的可见性后，系统才能把这些应用解析出来。 -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- 不再逐个硬编码包名：见下方 QUERY_ALL_PACKAGES 权限。 -->
+    </queries>
     <!-- 到点强制全屏（v2.4.2）：Android 15/16 上全屏通知在亮屏时已不生效，
          改用「悬浮窗」在任意应用之上直接叠加全屏休息页。需用户在系统设置里单独授权。 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />

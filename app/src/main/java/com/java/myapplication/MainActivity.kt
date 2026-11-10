@@ -27,6 +27,15 @@ class MainActivity : ComponentActivity() {
         // 通知「开始休息」按钮：由系统代发 Activity 启动（getActivity PendingIntent），
         // 携带 ACTION_REST_NOW 进入即表示用户已确认开始休息。
         handleRestNow(intent)
+        // v2.8.1：点通知本体进来时也记一次 —— 用户常先点横幅打开应用，
+        // 再在确认弹窗里点「开始休息」。此时系统前台已切到本应用，
+        // 但 UsageStats 里「切进来之前那个应用」仍在，记录依然准确。
+        //
+        // 用显式 extra 判断而不是 `action == null`：从桌面图标正常打开时
+        // action 同样是 null，那样会把无关的旧应用记成返回目标。
+        if (intent?.getBooleanExtra(RestNotifier.EXTRA_FROM_REMINDER, false) == true) {
+            com.java.myapplication.timer.EyeTimer.recordReturnTarget(this)
+        }
         setContent {
             // 自动夜间模式开关由 ViewModel 实时推送，拨动后无需重启应用即可生效
             val autoNight by viewModel.autoNightModeState
@@ -65,12 +74,19 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleRestNow(intent)
+        // v2.8.1：与 onCreate 同源，从通知横幅再次进入时也记录一次
+        if (intent.getBooleanExtra(RestNotifier.EXTRA_FROM_REMINDER, false)) {
+            com.java.myapplication.timer.EyeTimer.recordReturnTarget(this)
+        }
     }
 
     // 点击通知「开始休息」按钮：切换计时状态到休息。
     // 界面侧由 onResume → onForeground → syncFromStore 读到 phaseResting=true 后渲染休息页。
     private fun handleRestNow(intent: Intent?) {
         if (intent?.action != RestNotifier.ACTION_REST_NOW) return
+        // v2.8.1：先记录「点通知时在用的应用」，再进入休息 —— 顺序不能反：
+        // beginRest 会把当前状态落盘，若之后再写目标，那次落盘就带不上它了。
+        com.java.myapplication.timer.EyeTimer.recordReturnTarget(this)
         viewModel.startRest(this)
     }
 

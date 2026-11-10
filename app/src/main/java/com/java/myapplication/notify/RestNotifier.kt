@@ -46,6 +46,16 @@ object RestNotifier {
     // 通知「开始休息」按钮携带的 action（MainActivity 据此切换到休息状态）
     const val ACTION_REST_NOW = "com.java.myapplication.ACTION_REST_NOW"
 
+    /**
+     * 标记「本次启动来自提醒通知」（v2.8.1）。
+     *
+     * 为什么需要它：MainActivity 要在点击通知时记录「用户当时在用的应用」，
+     * 但无法用 `action == null` 判断 —— 从桌面图标正常打开应用时 action 同样是 null，
+     * 那样会把一个无关的旧应用记成返回目标，休息结束后跳到错误的地方。
+     * 因此由通知显式带上这个 extra，只有它存在时才记录。
+     */
+    const val EXTRA_FROM_REMINDER = "com.java.myapplication.extra.FROM_REMINDER"
+
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -145,6 +155,7 @@ object RestNotifier {
         // 通知点击 → 打开应用（后台时也会把应用切到前台，展示「该休息了」确认页）
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_FROM_REMINDER, true)
         }
         val contentPending = PendingIntent.getActivity(
             context, 1002, openIntent,
@@ -199,6 +210,7 @@ object RestNotifier {
             Intent(context, MainActivity::class.java).apply {
                 action = ACTION_REST_NOW
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EXTRA_FROM_REMINDER, true)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

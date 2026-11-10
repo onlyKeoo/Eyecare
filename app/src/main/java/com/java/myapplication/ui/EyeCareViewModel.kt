@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.java.myapplication.data.AppSettings
 import com.java.myapplication.data.EyeTips
+import com.java.myapplication.data.ForegroundApp
 import com.java.myapplication.data.SettingsStore
 import com.java.myapplication.data.StatsStore
 import com.java.myapplication.data.TimerState
@@ -47,6 +48,54 @@ class EyeCareViewModel : ViewModel() {
     // 剩余休息秒数
     var restRemaining by mutableIntStateOf(0)
         private set
+
+    /**
+     * 休息结束后将要返回的应用名（v2.8.0）；null = 未识别到返回目标。
+     *
+     * 由 [syncFromStore] 从 TimerState.returnTargetPkg 解析成可显示的名字，
+     * 供休息页在最后几秒提示「即将返回 <应用名>」。
+     * 解析放在这里而不是 Composable 里：PackageManager 查询是 IPC，
+     * 不该在每帧的组合里做。
+     */
+    var returnTargetLabel by mutableStateOf<String?>(null)
+        private set
+
+    /** 是否有一条「未识别到返回目标」的提示待显示（v2.8.0） */
+    var returnNoticePending by mutableStateOf(false)
+        private set
+
+    /**
+     * 消费掉待显示的提示。
+     *
+     * 在界面显示之前就把标记落盘清掉：如果等显示完再清，
+     * 用户中途离开页面会导致下次进来又弹一遍。
+     */
+    fun consumeReturnNotice(context: Context) {
+        if (!returnNoticePending) return
+        returnNoticePending = false
+        val s = TimerStore.load(context)
+        if (s.returnNoticePending) {
+            TimerStore.save(context, s.copy(returnNoticePending = false))
+        }
+    }
+
+    /**
+     * 取出待显示的提示文本（v2.8.5），并同步清掉持久化标记。
+     *
+     * 与 [consumeReturnNotice] 的区别：这个函数**只清标记、返回文本**，
+     * 由调用方决定何时显示。原实现是「先清内存标记再 showSnackbar」，
+     * 若 LaunchedEffect 因页面重组被取消，提示就永远不会出现 ——
+     * 这正是不跳转时用户看不到任何说明的原因（实测日志里 6 次失败均无提示）。
+     */
+    fun takeReturnNotice(context: Context): String? {
+        if (!returnNoticePending && !TimerStore.load(context).returnNoticePending) return null
+        returnNoticePending = false
+        val s = TimerStore.load(context)
+        if (s.returnNoticePending) {
+            TimerStore.save(context, s.copy(returnNoticePending = false))
+        }
+        return "休息已结束，未能返回原应用"
+    }
 
     // 当前展示的健康知识
     var currentTip by mutableStateOf(EyeTips.random())
@@ -173,6 +222,17 @@ class EyeCareViewModel : ViewModel() {
         reminderEnabled = s.reminderEnabled
         settings = appSettings
         currentTip = EyeTips.byIndex(s.tipIndex)
+
+        // v2.8.0：只有开启「休息后返回原应用」时才解析返回目标。
+        // 解析结果参与界面文案，关掉开关就不该显示「即将返回 xx」。
+        val targetPkg = s.returnTargetPkg
+        val newLabel = if (appSettings.returnToAppAfterRest && !targetPkg.isNullOrEmpty()) {
+            ForegroundApp.appLabel(context, targetPkg)
+        } else null
+        if (newLabel != returnTargetLabel) returnTargetLabel = newLabel
+        if (returnNoticePending != s.returnNoticePending) {
+            returnNoticePending = s.returnNoticePending
+        }
 
         val accumSec = if (s.screenOnAt > 0) {
             (s.workAccumMs + (now - s.screenOnAt)) / 1000L

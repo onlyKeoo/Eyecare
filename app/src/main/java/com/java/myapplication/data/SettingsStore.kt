@@ -58,6 +58,16 @@ data class AppSettings(
      */
     val restEndSoundSource: RestSoundSource = RestSoundSource.DEFAULT,
 
+    /**
+     * 休息结束后回到提醒发生时正在用的应用（v2.8.0）。
+     *
+     * 场景：在别的应用里到点只收到横幅 → 点通知进本应用休息 → 休息结束停留在这里。
+     * 开启后会把那个应用拉回前台，语义是「继续刚才的事」。
+     *
+     * 关闭时不查询使用记录（而不是查了不跳），避免无意义地读系统数据。
+     */
+    val returnToAppAfterRest: Boolean = true,
+
     // ============ 外观 ============
     val autoNightMode: Boolean = true   // 自动随系统切换夜间模式
 ) {
@@ -122,6 +132,8 @@ object SettingsStore {
     private const val KEY_AUTO_FULL_SCREEN = "auto_full_screen"
     // v2.4.0
     private const val KEY_OVERDUE_REMIND_MINUTES = "overdue_remind_minutes"
+    // v2.8.0
+    private const val KEY_RETURN_TO_APP = "return_to_app"
     private const val KEY_DND_ENABLED = "dnd_enabled"
     private const val KEY_DND_START = "dnd_start_minute"
     private const val KEY_DND_END = "dnd_end_minute"
@@ -156,6 +168,7 @@ object SettingsStore {
             restEndSoundEnabled = p.getBoolean(KEY_REST_END_SOUND, d.restEndSoundEnabled),
             restEndSoundVibrate = p.getBoolean(KEY_REST_END_SOUND_VIBRATE, d.restEndSoundVibrate),
             restEndSoundSource = RestSoundSource.fromKey(p.getString(KEY_REST_END_SOUND_SOURCE, null)),
+            returnToAppAfterRest = p.getBoolean(KEY_RETURN_TO_APP, d.returnToAppAfterRest),
             autoNightMode = p.getBoolean(KEY_AUTO_NIGHT, d.autoNightMode)
         )
     }
@@ -175,6 +188,7 @@ object SettingsStore {
             .putBoolean(KEY_REST_END_SOUND, settings.restEndSoundEnabled)
             .putBoolean(KEY_REST_END_SOUND_VIBRATE, settings.restEndSoundVibrate)
             .putString(KEY_REST_END_SOUND_SOURCE, settings.restEndSoundSource.name)
+            .putBoolean(KEY_RETURN_TO_APP, settings.returnToAppAfterRest)
             .putBoolean(KEY_AUTO_NIGHT, settings.autoNightMode)
             .apply()
     }

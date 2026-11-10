@@ -103,10 +103,18 @@ fun RestScreen(viewModel: EyeCareViewModel, context: Context) {
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(8.dp))
+            // v2.8.0：最后 5 秒把副标题换成「即将返回 <应用名>」。
+            //
+            // 为什么替换而不是新增一行：休息页信息已经不少，再压一行会把倒计时环挤下去；
+            // 而原来的「看向 6 米外」在看到第 15 秒时早已读完，末段让位给
+            // 「接下来会发生什么」更有价值 —— 避免用户正在看知识卡被无声弹走（决策 D5）。
+            val aboutToReturn = viewModel.restRemaining in 1..RETURN_HINT_SECONDS
+            val returnLabel = viewModel.returnTargetLabel
             Text(
-                "让眼睛离开屏幕，看向 6 米外的远方",
+                text = if (aboutToReturn && returnLabel != null) "即将返回 $returnLabel"
+                else "让眼睛离开屏幕，看向 6 米外的远方",
                 style = MaterialTheme.typography.bodyMedium,
-                color = subtitleColor,
+                color = if (aboutToReturn && returnLabel != null) accentColor else subtitleColor,
                 textAlign = TextAlign.Center
             )
 
@@ -247,3 +255,11 @@ private val RestDarkCard = Color(0xFF2A3831)      // 深色卡面
 private val NightGreenBright = Color(0xFF7CC9A0)  // 深色底上的绿字（比 NightGreen 更亮）
 private val GrassGreenDeep = Color(0xFF2F7A54)    // 浅色底上的绿字（比 GrassGreenDark 更深）
 private val SubtitleOnLight = Color(0xFF4F5F56)   // 浅色底上的副标题灰（比 InkGraySecondary 更深）
+
+/**
+ * 「即将返回 <应用名>」从倒数第几秒开始显示（v2.8.0，决策记录 D8）。
+ *
+ * 默认休息 20 秒时占其四分之一：足够读完提示并决定是否点「再多休息一会」，
+ * 又不至于让整段休息的一半时间都在预告结束。
+ */
+private const val RETURN_HINT_SECONDS = 5

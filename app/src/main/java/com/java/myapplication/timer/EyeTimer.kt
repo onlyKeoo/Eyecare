@@ -5,6 +5,7 @@ import android.os.PowerManager
 import com.java.myapplication.AppForeground
 import com.java.myapplication.data.AppSettings
 import com.java.myapplication.data.EyeTips
+import com.java.myapplication.data.ForegroundApp
 import com.java.myapplication.data.SettingsStore
 import com.java.myapplication.data.StatsStore
 import com.java.myapplication.data.TimerState
@@ -670,6 +671,14 @@ object EyeTimer {
         // 打架：下一段从 0 长到 1200s 时会被整段再记一遍（统计虚高根因）。
         val curAccum = accumulatedAt(s, t, isScreenOn(context))
         val settled = recordWorkSession(context, s.copy(workAccumMs = curAccum))
+        // v2.8.1：**不再在此处记录返回目标**。
+        //
+        // 原实现在闹钟触发的这一刻查询「最近前台应用」，实测大多数情况下查不到：
+        // 到点闹钟多在后台/Doze 边缘投递，此时 UsageStats 的最新事件往往还没落盘，
+        // 或落盘的是上一个应用。结果就是「偶尔生效、多数不生效」。
+        //
+        // 现在改为在**用户点击通知横幅的那一刻**记录（见 [recordReturnTarget]）：
+        // 那一刻用户刚操作过、系统处于唤醒态，事件已经落盘，可靠得多。
         val deadlineState = settled.copy(
             workAccumMs = curAccum,
             screenOnAt = t,
@@ -756,6 +765,43 @@ object EyeTimer {
         }
     }
 
+    /**
+     * 记录「用户点通知横幅时正在用的应用」，供休息结束后跳回（v2.8.1）。
+     *
+     * 为什么改到这一刻：原实现放在到点闹钟里查，那时应用在后台/Doze 边缘，
+     * UsageStats 的最新事件往往尚未落盘，实测多数情况查不到 —— 表现为
+     * 「偶尔生效、多数不生效」。用户点击通知时刚操作过、系统处于唤醒态，
+     * 事件已落盘，查得准。
+     *
+     * 调用点：MainActivity 处理通知点击（含「开始休息」动作按钮）时，
+     * **先于** [beginRest] 调用，这样 beginRest 落盘时能把目标一起带上。
+     */
+    fun recordReturnTarget(context: Context) {
+        val settings = SettingsStore.load(context)
+        if (!settings.returnToAppAfterRest) {
+            // 开关关闭：清掉可能残留的旧值，避免上一轮的目标被误用（D7）
+            val cur = TimerStore.load(context)
+            if (cur.returnTargetPkg != null) {
+                TimerStore.save(context, cur.copy(returnTargetPkg = null))
+            }
+            return
+        }
+        // 此刻本应用已被切到前台，查询结果会包含自己 —— ForegroundApp 内部
+        // 已把本应用包名排除，取到的是「切进来之前那个应用」。
+        val pkg = ForegroundApp.lastForegroundPackageAt(context) ?: run {
+            val cur = TimerStore.load(context)
+            if (cur.returnTargetPkg != null) {
+                TimerStore.save(context, cur.copy(returnTargetPkg = null))
+            }
+            return
+        }
+        val cur = TimerStore.load(context)
+        if (cur.returnTargetPkg != pkg) {
+            TimerStore.save(context, cur.copy(returnTargetPkg = pkg))
+        }
+        TimerTrace.event("returnTarget recorded=$pkg")
+    }
+
     /** 进入休息（用户点通知按钮 / App 内「现在休息一下」）——此时才开始休息倒计时 */
     fun beginRest(context: Context) {
         var s = TimerStore.load(context)
@@ -770,6 +816,12 @@ object EyeTimer {
         val frozenState = frozen(s, t)
         recordWorkSession(context, frozenState)
         recordOverdue(context, s, t)
+        // v2.8.0：只有「到点提醒 → 用户开始休息」这一条路径才该在结束后跳回原应用。
+        //
+        // 用户在应用内主动点「现在休息一下」时，s.awaitingRest 为 false ——
+        // 此时若不清掉 returnTargetPkg，就会跳回**上一轮**那次提醒记录的旧应用，
+        // 属于跳到与本次操作无关的地方（决策记录 D1 已排除场景 C）。
+        val startedFromDeadline = s.awaitingRest
         TimerStore.save(
             context,
             frozenState.copy(
@@ -778,7 +830,8 @@ object EyeTimer {
                 awaitingRest = false,
                 overdueCounting = false,
                 overdueRecordedMs = 0L,
-                tipIndex = EyeTips.nextIndex(s.tipIndex)
+                tipIndex = EyeTips.nextIndex(s.tipIndex),
+                returnTargetPkg = if (startedFromDeadline) s.returnTargetPkg else null
             )
         )
         AlarmScheduler.cancelWorkAlarm(context)
@@ -799,26 +852,59 @@ object EyeTimer {
         // 先到者落盘 phaseResting=false，后到者直接返回 —— 这也是「只响一声」的根本保证。
         if (!s.phaseResting) return
         val settings = SettingsStore.load(context)
-        StatsStore.addRest(context, settings.restSeconds)
-        // 提示音、振动、通知三条路径各管一件事（放在状态机里，息屏 / 应用被杀时
-        // 由闹钟拉起也能生效）：
-        // 1. 响声**只由 [RestSoundPlayer] 自己播**，且只播一次 —— 通知不再发声，
-        //    所以「响两次」在结构上就没有第二个来源（v2.3.9 的教训：交给通知渠道播
-        //    在部分 ROM 上会一声都不响，且我们既控制不了也查不出原因）；
-        // 2. 振动由 [RestVibrator] 自己发，走「通知」用途，不再被系统的触摸振动设置丢掉；
-        // 3. 通知固定静默，只负责在通知栏留一条痕迹。
-        if (settings.restEndSoundEnabled) {
-            RestSoundPlayer.play(context, settings.restEndSoundSource)
+
+        // v2.8.3：整段收尾放进 try，[endRestPhase] 放在 finally。
+        //
+        // 这不是防御性编程的洁癖，而是针对刚刚发生的事故：上一版删掉
+        // `endRestPhase` 调用后，`phaseResting` 永远为 true，界面每秒重跑
+        // 本函数、每秒振一次、统计也被每秒 +1。任何一处异常或遗漏都会造成同样的
+        // 「卡在 0 秒」现象，而它极难从界面现象反推。
+        //
+        // 现在把「退出休息态」变成无条件执行的一步：无论跳转、通知、提示音
+        // 哪一步失败，状态机都必定退出休息态。
+        var returnEnabled = false
+        var launched = false
+        var returnPkg: String? = null
+        try {
+            StatsStore.addRest(context, settings.restSeconds)
+            // 提示音、振动、通知三条路径各管一件事（放在状态机里，息屏 / 应用被杀时
+            // 由闹钟拉起也能生效）：
+            // 1. 响声**只由 [RestSoundPlayer] 自己播**，且只播一次 —— 通知不再发声，
+            //    所以「响两次」在结构上就没有第二个来源（v2.3.9 的教训：交给通知渠道播
+            //    在部分 ROM 上会一声都不响，且我们既控制不了也查不出原因）；
+            // 2. 振动由 [RestVibrator] 自己发，走「通知」用途，不再被系统的触摸振动设置丢掉；
+            // 3. 通知固定静默，只负责在通知栏留一条痕迹。
+            if (settings.restEndSoundEnabled) {
+                RestSoundPlayer.play(context, settings.restEndSoundSource)
+            }
+            if (AppSettings.isRestEndVibrateActive(
+                    settings.restEndSoundEnabled,
+                    settings.restEndSoundVibrate
+                )
+            ) {
+                RestVibrator.vibrateOnce(context)
+            }
+            RestNotifier.notifyRestEnd(context)
+
+            // v2.8.0：休息结束后回到提醒发生时正在用的应用。
+            // 必须在 endRestPhase 之前取包名 —— 它落盘新状态后这份 s 就过期了。
+            returnEnabled = settings.returnToAppAfterRest
+            returnPkg = s.returnTargetPkg
+            launched = returnEnabled && returnPkg != null && ForegroundApp.launch(context, returnPkg)
+        } finally {
+            endRestPhase(context, s)
         }
-        if (AppSettings.isRestEndVibrateActive(
-                settings.restEndSoundEnabled,
-                settings.restEndSoundVibrate
+
+        TimerTrace.event(
+            "finishRest return enabled=$returnEnabled pkg=${returnPkg} launched=$launched"
+        )
+        // 跳成功时应用已切到后台，用户看不到提示，不必写盘；只有失败才留一句说明（D6）。
+        if (returnEnabled && !launched) {
+            TimerStore.save(
+                context,
+                TimerStore.load(context).copy(returnNoticePending = true)
             )
-        ) {
-            RestVibrator.vibrateOnce(context)
         }
-        RestNotifier.notifyRestEnd(context)
-        endRestPhase(context, s)
     }
 
     /** 手动结束休息（点「我已休息好，继续工作」）——按实际休息秒数计入统计 */
@@ -872,6 +958,10 @@ object EyeTimer {
                 awaitingRest = false,
                 overdueCounting = false,
                 overdueRecordedMs = 0L,
+                // v2.8.1：本轮已放弃休息，返回目标作废。
+                // 否则它会被下一轮「到点 → 应用内点开始休息」误当成有效目标，
+                // 把用户跳到上一轮记录的旧应用上。
+                returnTargetPkg = null
             ).newSegment(at = t, screenOn = screenOn)
         )
         AlarmScheduler.cancelOverdueReminder(context)
@@ -903,6 +993,10 @@ object EyeTimer {
                 awaitingRest = false,
                 overdueCounting = false,
                 overdueRecordedMs = 0L,
+                // v2.8.1：本轮休息已结束，返回目标作废。
+                // finishRest 里跳转已用掉它；skipRest（点「我已休息好」）不跳转，
+                // 但也不能把旧目标留到下一轮。
+                returnTargetPkg = null
             ).newSegment(at = t, screenOn = screenOn)
         )
         AlarmScheduler.cancelRestAlarm(context)

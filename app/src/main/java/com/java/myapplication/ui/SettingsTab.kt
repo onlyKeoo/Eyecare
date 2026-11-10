@@ -180,6 +180,20 @@ fun SettingsTab(
                 }
             )
             Spacer(Modifier.height(16.dp))
+            // v2.8.0：休息结束后回到提醒发生时正在用的应用。
+            // 副标题只写「不看就猜不到」的部分：需要「使用情况访问」权限才生效，
+            // 以及为什么可能不生效（权限没给）。D6 的降级行为不写在这里 ——
+            // 真失败时界面上会直接说明，不必提前预告。
+            SwitchSettingRow(
+                title = "休息后回到原应用",
+                subtitle = "休息结束自动返回提醒时在用的应用；需「使用情况访问」权限",
+                checked = s.returnToAppAfterRest,
+                onChecked = { v ->
+                    update({ it.copy(returnToAppAfterRest = v) },
+                        if (v) "已开启休息后回到原应用" else "已关闭休息后回到原应用")
+                }
+            )
+            Spacer(Modifier.height(16.dp))
             SwitchSettingRow(
                 title = "启用免打扰时段",
                 subtitle = "时段内只计时不打扰，出时段自动恢复",

@@ -190,6 +190,21 @@ fun EyeCareApp(viewModel: EyeCareViewModel = viewModel()) {
         }
     }
 
+    // v2.8.5：休息结束但没能返回原应用时，给一句说明（决策记录 D6）。
+    //
+    // 原实现在这里直接用 Snackbar，实测**从未显示过**。原因有两层：
+    // 1. `finishRest` 常由后台闹钟触发，那时本页面根本没有组合，Snackbar 无处可弹；
+    // 2. 先清标记再 showSnackbar，若 LaunchedEffect 因重组被取消，提示就丢了。
+    //
+    // 现在改为「进入前台时补一次」：标记持久化在 TimerStore 里，等用户真正
+    // 看到界面时才取出来显示，因此后台结束也不会丢失。
+    LaunchedEffect(viewModel.phase) {
+        if (viewModel.phase == RestPhase.IDLE) {
+            val msg = viewModel.takeReturnNotice(context)
+            if (msg != null) snackbarHostState.showSnackbar(msg)
+        }
+    }
+
     // 到点提醒确认弹窗：点了「开始休息」才开始休息计时
     if (viewModel.phase == RestPhase.AWAITING) {
         // 弹窗出现时轻振一下：手上拿着手机、音量静音时也能察觉

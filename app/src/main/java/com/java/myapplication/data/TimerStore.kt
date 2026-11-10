@@ -71,7 +71,27 @@ data class TimerState(
      * 「本段已结算」的可信基准；不相等说明累计已开新段，旧基准一律作废。
      *
      */
-    val recordedGeneration: Long = 0L
+    val recordedGeneration: Long = 0L,
+
+    // ============ v2.8.0：休息结束后回到原应用 ============
+    /**
+     * 到点提醒发出时，用户正在使用的应用包名（null = 未识别或功能关闭）。
+     *
+     * 为什么记在计时状态里而不是单独存一个键：它的生命周期与这一轮用眼/休息
+     * 完全一致 —— 提醒时写入，休息结束时消费，下一轮提醒覆盖。放在 TimerStore
+     * 里可以避免「休息结束读到上一轮的残留」这种跨文件的时序问题。
+     */
+    val returnTargetPkg: String? = null,
+
+    /**
+     * 「未识别到返回目标」这条提示是否还等着显示（v2.8.0）。
+     *
+     * 为什么需要它：跳转成功时应用已切到后台，用户看不到任何提示、也不需要；
+     * 只有识别失败时用户仍停留在本应用，才需要一句说明（决策记录 D6）。
+     * 由 [com.java.myapplication.timer.EyeTimer.finishRest] 置位，
+     * 界面显示一次后清掉，避免每次进页面都弹。
+     */
+    val returnNoticePending: Boolean = false
 )
 
 object TimerStore {
@@ -94,6 +114,9 @@ object TimerStore {
     // v2.6.12
     private const val KEY_ACCUM_GENERATION = "accum_generation"
     private const val KEY_RECORDED_GENERATION = "recorded_generation"
+    // v2.8.0
+    private const val KEY_RETURN_TARGET_PKG = "return_target_pkg"
+    private const val KEY_RETURN_NOTICE_PENDING = "return_notice_pending"
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -114,7 +137,9 @@ object TimerStore {
             accumStartWallMs = p.getLong(KEY_ACCUM_START_WALL_MS, -1L),
             recordedAccumMs = p.getLong(KEY_RECORDED_ACCUM_MS, 0L),
             accumGeneration = p.getLong(KEY_ACCUM_GENERATION, 0L),
-            recordedGeneration = p.getLong(KEY_RECORDED_GENERATION, 0L)
+            recordedGeneration = p.getLong(KEY_RECORDED_GENERATION, 0L),
+            returnTargetPkg = p.getString(KEY_RETURN_TARGET_PKG, null),
+            returnNoticePending = p.getBoolean(KEY_RETURN_NOTICE_PENDING, false)
         )
     }
 
@@ -134,6 +159,8 @@ object TimerStore {
             .putLong(KEY_RECORDED_ACCUM_MS, state.recordedAccumMs)
             .putLong(KEY_ACCUM_GENERATION, state.accumGeneration)
             .putLong(KEY_RECORDED_GENERATION, state.recordedGeneration)
+            .putString(KEY_RETURN_TARGET_PKG, state.returnTargetPkg)
+            .putBoolean(KEY_RETURN_NOTICE_PENDING, state.returnNoticePending)
             .apply()
     }
 }
