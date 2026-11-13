@@ -13,8 +13,11 @@ android {
         applicationId = "com.java.myapplication"
         minSdk = 24
         targetSdk = 35
-        versionCode = 36
-        versionName = "2.7.1"
+        // v2.9.0：跨过一个只在代码注释里存在的小版本序列。
+        // v2.7.2–v2.8.9 的改动从未单独出包，它们累积在这次发布里；
+        // 版本号跳过 2.8.x 是因为那段序列已被内部注释占用，回填会造成混淆。
+        versionCode = 37
+        versionName = "2.9.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
