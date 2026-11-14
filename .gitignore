@@ -23,5 +23,6 @@ local.properties
 *.keystore
 *.jks
 
-# 本地 AI 协作规则，不随仓库发布
+# 本地协作规则与完整开发记录，不随仓库发布
 AGENTS.md
+CHANGELOG.md

@@ -98,6 +98,7 @@ AAPT2 aapt2-9.0.0-14304508-linux Daemon #0: Daemon startup failed
 | v2.6.11 | 34 | `1a019c962f046fc9c01ac24abb54db95` |
 | v2.4.3 | 33 | `8c9b1226b32e47826e4958e96d2e5596` |
 | v2.4.2 | 32 | `9b70603091d9272f1e1df716a0b9ad17` |
+| v2.4.1 | 31 | —（横轴乱码临时修复版，未单独归档） |
 | v2.4.0 | 30 | `c937b2ec574a61d486440f15e1166780` |
 | v2.3.15 | 29 | `4ab377a275c93b705e6fb634dc563bd7` |
 | v2.3.14 | 28 | `01ab98d6879b622a89eba03059976713` |
@@ -150,7 +151,7 @@ AAPT2 aapt2-9.0.0-14304508-linux Daemon #0: Daemon startup failed
 
 </details>
 
-> 更早版本的详细改动记录（含调试取证过程）见 [CHANGELOG.md](CHANGELOG.md)。
+> 更早版本只保留上表这一行摘要，不再展开。
 
 ---
 
@@ -161,7 +162,9 @@ AAPT2 aapt2-9.0.0-14304508-linux Daemon #0: Daemon startup failed
 - **原仓库**：`HuaHai-114514/eyecare` —— 因作者设备重置后丢失 2FA 与密码，已无法访问，**不再维护**
 - **现仓库**：`onlyKeoo/Eyecare` —— 当前唯一维护中的仓库
 
-两者代码同源。原仓库的历史记录（commit、issue、star）无法迁移；如需追溯旧版本的改动细节，请查阅 [`CHANGELOG.md`](CHANGELOG.md)，其中完整保留了从 v2.3.1 起的每次变更。
+两者代码同源。原仓库的历史记录（commit、issue、star）无法迁移；
+如需追溯旧版本的改动细节，请看 git 提交历史——每次改动都有独立 commit，
+说明里写了改了什么、为什么改。
 
 ---
 
