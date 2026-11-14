@@ -28,13 +28,16 @@ android {
     signingConfigs {
         create("local") {
             // 仅用于本地产物交付（可直接安装的 APK）；凭据不存在时不影响其他构建。
-            // 优先级：环境变量 EYECARE_KEYSTORE > user.home > /root/.android/debug.keystore
+            //
+            // 优先级：环境变量 EYECARE_KEYSTORE > ~/.android/debug.keystore。
+            // 只按 user.home 推导，不写死任何绝对路径：user.home 本身已经覆盖了
+            // 常见位置，再追加一条固定路径既多余，也等于把开发机的目录结构写进仓库。
+            val home = System.getProperty("user.home")
             val candidates = listOfNotNull(
                 System.getenv("EYECARE_KEYSTORE")?.let { File(it) },
-                System.getProperty("user.home")?.let { File(it, ".android/debug.keystore") },
-                File("/root/.android/debug.keystore"),
+                home?.let { File(it, ".android/debug.keystore") },
             )
-            val ks = candidates.firstOrNull { it != null && it.exists() }
+            val ks = candidates.firstOrNull { it.exists() }
             if (ks != null) {
                 storeFile = ks
                 storePassword = System.getenv("EYECARE_STORE_PASS") ?: "android"

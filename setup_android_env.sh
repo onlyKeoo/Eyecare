@@ -331,7 +331,7 @@ update_gradle_wrapper_properties() {
 
   # 默认**不改**仓库里的 distributionUrl。
   #
-  # 早期实现会无条件改成 file:///root/... 这样的绝对路径，而这是受版本控制
+  # 早期实现会无条件改成 file:///绝对路径 这样的形式，而这是受版本控制
   # 的文件：一旦提交，别人 clone 下来 wrapper 直接指向不存在的本地文件。
   # 现有 URL 指向 services.gradle.org，Gradle 会缓存到 GRADLE_USER_HOME，
   # 装了 Gradle 的机器本来就不必改。只有显式设置 EYECARE_FORCE_LOCAL_WRAPPER=1
@@ -428,9 +428,9 @@ EOF
 configure_env_persistence() {
   local bashrc="$HOME/.bashrc"
   touch "$bashrc"
-  if ! grep -q "operit android env" "$bashrc"; then
+  if ! grep -q "eyecare android env" "$bashrc"; then
     cat >> "$bashrc" <<EOF
-# >>> operit android env >>>
+# >>> eyecare android env >>>
 export JAVA_HOME=$JAVA_HOME
 export ANDROID_HOME=$ANDROID_HOME
 export ANDROID_SDK_ROOT=$ANDROID_HOME
@@ -438,7 +438,7 @@ export PATH=\$ANDROID_HOME/cmdline-tools/latest/bin:\$ANDROID_HOME/platform-tool
 export GRADLE_USER_HOME=$GRADLE_USER_HOME
 export GRADLE_HOME=${GRADLE_HOME:-$HOME/gradle/gradle-9.1.0}
 export PATH=\$GRADLE_HOME/bin:\$PATH
-# <<< operit android env <<<
+# <<< eyecare android env <<<
 EOF
     log "Environment variables appended to ~/.bashrc"
   else

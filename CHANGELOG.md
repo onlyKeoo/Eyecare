@@ -32,7 +32,7 @@ README 只保留精简版的版本历史与更新日志简表；需要追溯细�
 | v2.4.2 | 32 | `9b70603091d9272f1e1df716a0b9ad17`（8,147,727 字节，release 已签名） |
 | v2.4.3 | 33 | `8c9b1226b32e47826e4958e96d2e5596`（8,147,731 字节，release 已签名） |
 | v2.6.11 | 34 | `1a019c962f046fc9c01ac24abb54db95`（8,164,467 字节，release 已签名） |
-| **v2.9.0** | 37 | `e9ce6338d4a8c9ae82ba55afa27f75e3`（8,197,359 字节，release 已签名） |
+| **v2.9.0** | 37 | `d919bb01a86047c18c89e11fe8cbf397`（8,197,359 字节，release 已签名） |
 | v2.7.1 | 36 | `6f561e3e7c2c379e77a815fd11fd2bbd`（8,180,883 字节，release 已签名） |
 | v2.7.0 | 35 | —（未单独发布安装包，改动并入 v2.7.1） |
 
@@ -239,7 +239,7 @@ README 只保留精简版的版本历史与更新日志简表；需要追溯细�
 
 - **AGP 9.0.0 + Gradle 9.1.0**。
 - **关键修复**：AGP 9 的 optimizeReleaseResources（aapt2 optimize）在本 proot 环境下**静默产出空资源包**，导致成品 APK 缺失 AndroidManifest.xml / resources.arsc，无法解析安装（系统报 FileNotFoundException: AndroidManifest.xml）。已在 gradle.properties 关闭资源优化：`android.enableResourceOptimizations=false`。关闭后产物回归正常（155 条目、含 manifest + arsc + 68 个 res/）。
-- **签名**：app/build.gradle.kts 新增 signingConfigs.local，按「环境变量 EYECARE_KEYSTORE → user.home → /root/.android/debug.keystore」探测 keystore；找不到时退化为未签名构建，不影响其他环境。release 默认 v2/v3 签名。
+- **签名**：app/build.gradle.kts 新增 signingConfigs.local，按「环境变量 EYECARE_KEYSTORE → ~/.android/debug.keystore」探测 keystore；找不到时退化为未签名构建，不影响其他环境。release 默认 v2/v3 签名。
 - **产物**：app/build/outputs/apk/release/app-release.apk，已在真机通过 pm install 验证安装成功（versionCode 30 / versionName 2.4.0）。
 
 ### 涉及文件

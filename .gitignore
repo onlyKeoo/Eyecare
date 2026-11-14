@@ -15,11 +15,11 @@
 .cxx
 local.properties
 
-# Operit workspace internals（工具运行数据，不应发布）
+# 本地工具运行数据与构建中间产物，不应发布
 /.backup/
-/.operit/
 /.kotlin/
 /tools/
+/.reset-to-app/
 *.keystore
 *.jks
 

@@ -92,7 +92,7 @@ AAPT2 aapt2-9.0.0-14304508-linux Daemon #0: Daemon startup failed
 
 | 版本 | versionCode | APK MD5 |
 |---|---:|---|
-| **v2.9.0** | 37 | `e9ce6338d4a8c9ae82ba55afa27f75e3` |
+| **v2.9.0** | 37 | `d919bb01a86047c18c89e11fe8cbf397` |
 | v2.7.1 | 36 | `6f561e3e7c2c379e77a815fd11fd2bbd` |
 | v2.7.0 | 35 | `497dc33da4b378ba7f40b2aca3853d22` |
 | v2.6.11 | 34 | `1a019c962f046fc9c01ac24abb54db95` |
