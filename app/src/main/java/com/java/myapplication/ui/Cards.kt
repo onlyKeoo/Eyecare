@@ -46,6 +46,7 @@ import com.java.myapplication.data.EyeTip
 import com.java.myapplication.data.EyeTips
 import com.java.myapplication.ui.theme.*
 import top.yukonga.miuix.kmp.basic.Card as MiuixCard
+import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
 import kotlinx.coroutines.delay
 
 // 柔和卡片容器
@@ -53,13 +54,11 @@ import kotlinx.coroutines.delay
 // v2.10.0（ui-miuix）：改用 miuix 的 Card。
 //
 // 与手写版的三点差别，都是「MIUI 观感」的来源：
-// 1. **圆角 20dp → 16dp**。MIUI 的卡片圆角偏收敛，20dp 在 400dp 宽的屏上
-//    显得过于"胶囊化"；16dp 是 miuix 的默认值，也是 MIUI 系统的实际取值。
+// 1. **圆角 20dp → 24dp**。HyperOS 的卡片圆角明显大于 Material，
+//    24dp 才是「一眼 MIUI」的关键。第一轮误用了 miuix 默认的 16dp，
+//    比改造前还方，方向反了（已纠正）。
 // 2. **不要描边**。miuix 卡片靠 `surfaceContainer`（纯白）与 `background`
-//    （米白）的底色差分层，不加边框。之前 0.30 的描边是为了补救
-//    Material 版几乎为零的层次感，现在底色差够明显，描边反而多余。
-// 3. **内边距 20dp → 16dp**。miuix 的密度比 Material 略紧，
-//    20dp 会让内容显得松散；16dp 与系统设置页对齐。
+//    （米白）的底色差分层，不加边框。
 //
 // 注意 `insideMargin` 是 miuix Card 自带的参数，不要再在外面套 padding，
 // 否则会叠加成 32dp。
@@ -70,8 +69,8 @@ fun SoftCard(
 ) {
     MiuixCard(
         modifier = modifier.fillMaxWidth(),
-        cornerRadius = 16.dp,
-        insideMargin = PaddingValues(16.dp),
+        cornerRadius = 24.dp,
+        insideMargin = PaddingValues(18.dp),
     ) {
         content()
     }
@@ -97,12 +96,12 @@ fun EyeCareSwitchCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
-            Switch(
+            // v2.10.0：换成 miuix Switch。与 Material3 的差别：
+            // 轨道更高更圆、滑块是纯白圆点、开启态轨道用主题 primary，
+            // 按下时轨道会有内缩反馈。这些是 MIUI 开关的辨识特征。
+            MiuixSwitch(
                 checked = enabled,
                 onCheckedChange = onToggle,
-                colors = SwitchDefaults.colors(
-                    checkedTrackColor = MaterialTheme.colorScheme.primary
-                )
             )
         }
     }

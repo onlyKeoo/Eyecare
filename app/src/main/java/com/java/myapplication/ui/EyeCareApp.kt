@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -46,6 +47,8 @@ import com.java.myapplication.ui.theme.*
 import top.yukonga.miuix.kmp.basic.NavigationBar as MiuixNavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem as MiuixNavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
+import top.yukonga.miuix.kmp.basic.Button as MiuixTextButton
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
 import kotlinx.coroutines.delay
@@ -301,12 +304,15 @@ private fun TimerTab(
         // 顶部标题（设置入口统一放在底部导航，避免同一功能两处入口）
         // 这一列整体是居中的（进度环、按钮需要），但标题单独包一层占满宽度，
         // 走默认的 Start 对齐 —— 三个页面的标题就都在同一条左基准线上。
+        // v2.10.0：标题改用 miuix 的 Title1（32sp）——
+        // 这是 MIUI/HyperOS「大标题」的取值，与 Material3 的 headlineLarge 同号，
+        // 但字重和字距按 miuix 的规范走。用 MiuixTheme.textStyles 取，
+        // 保证以后统一调字号时不用改每一处。
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                "护眼时光",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onBackground
+                text = "护眼时光",
+                style = MiuixTheme.textStyles.title1,
+                color = MiuixTheme.colorScheme.onBackground,
             )
         }
 
@@ -425,17 +431,23 @@ private fun TimerTab(
         // 却占了整行宽度 + 最高饱和度主色，视觉权重压过进度环本身，
         // 让人误以为它是本页的主行动。降级后环才是唯一视觉主体。
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            OutlinedButton(
+            // v2.10.0：换成 miuix 的描边按钮。
+            // 形态与 Material3 的 OutlinedButton 相近，但有三处 MIUI 特征：
+            // 圆角固定 16dp（不是全圆胶囊）、内边距更紧、按下时整体缩放并变淡。
+            MiuixTextButton(
                 onClick = { viewModel.startRest(context) },
-                shape = CircleShape,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
-                contentPadding = PaddingValues(horizontal = 28.dp, vertical = 12.dp)
+                cornerRadius = 22.dp,
+                minWidth = 148.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.buttonColors(
+                    color = MiuixTheme.colorScheme.secondaryVariant,
+                    contentColor = MiuixTheme.colorScheme.primary,
+                ),
             ) {
                 Text(
                     "现在休息一下",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
