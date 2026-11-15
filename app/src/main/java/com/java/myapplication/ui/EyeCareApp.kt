@@ -43,6 +43,11 @@ import com.java.myapplication.ui.components.DailyBarChart
 import com.java.myapplication.ui.components.EyeIcons
 import com.java.myapplication.ui.components.EyeProgressRing
 import com.java.myapplication.ui.theme.*
+import top.yukonga.miuix.kmp.basic.NavigationBar as MiuixNavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarItem as MiuixNavigationBarItem
+import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -129,29 +134,37 @@ fun EyeCareApp(viewModel: EyeCareViewModel = viewModel()) {
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface
+            // v2.10.0（ui-miuix）：底部导航换成 miuix 的 NavigationBar。
+            //
+            // 与 Material3 版的差别不只是外观：
+            // - 图标与文字共用同一套 tint / 字重逻辑（选中加粗、未选中常规）；
+            // - 自带顶部 1px 分割线（showDivider），不再需要手工描边；
+            // - 高度由 NavigationBarDefaults.ItemHeight 统一控制，不跟随字号。
+            //
+            // 图标仍用项目自绘的 EyeIcons —— miuix-icons 那套是 MIUI 系统图标，
+            // 换成它会丢掉「眼睛/报告/设置」的语义（DESIGN.md：整个界面只用一套图标）。
+            MiuixNavigationBar(
+                color = MiuixTheme.colorScheme.surface,
+                showDivider = true,
+                mode = NavigationBarDisplayMode.IconAndText,
             ) {
-                NavigationBarItem(
+                MiuixNavigationBarItem(
                     selected = currentTab == Tab.TIMER,
                     onClick = { goTo(Tab.TIMER) },
-                    icon = { Icon(EyeIcons.Timer, contentDescription = "护眼计时") },
-                    label = { Text("护眼计时") },
-                    colors = navItemColors()
+                    icon = EyeIcons.Timer,
+                    label = "护眼计时",
                 )
-                NavigationBarItem(
+                MiuixNavigationBarItem(
                     selected = currentTab == Tab.REPORT,
                     onClick = { goTo(Tab.REPORT) },
-                    icon = { Icon(EyeIcons.Report, contentDescription = "数据报告") },
-                    label = { Text("数据报告") },
-                    colors = navItemColors()
+                    icon = EyeIcons.Report,
+                    label = "数据报告",
                 )
-                NavigationBarItem(
+                MiuixNavigationBarItem(
                     selected = currentTab == Tab.SETTINGS,
                     onClick = { goTo(Tab.SETTINGS) },
-                    icon = { Icon(EyeIcons.Settings, contentDescription = "护眼设置") },
-                    label = { Text("护眼设置") },
-                    colors = navItemColors()
+                    icon = EyeIcons.Settings,
+                    label = "护眼设置",
                 )
             }
         }

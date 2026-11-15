@@ -45,35 +45,36 @@ import com.java.myapplication.ui.components.EyeIcons
 import com.java.myapplication.data.EyeTip
 import com.java.myapplication.data.EyeTips
 import com.java.myapplication.ui.theme.*
+import top.yukonga.miuix.kmp.basic.Card as MiuixCard
 import kotlinx.coroutines.delay
 
 // 柔和卡片容器
-// v2.4：加一层极淡的描边，让白卡从米白/夜色底里"浮"起来。
-// 之前只有背景色差（surfaceVariant vs background），层次几乎为零；
-// 描边用 outline 的低透明度版本，日夜两套主题都能自然过渡，不喧宾夺主。
+//
+// v2.10.0（ui-miuix）：改用 miuix 的 Card。
+//
+// 与手写版的三点差别，都是「MIUI 观感」的来源：
+// 1. **圆角 20dp → 16dp**。MIUI 的卡片圆角偏收敛，20dp 在 400dp 宽的屏上
+//    显得过于"胶囊化"；16dp 是 miuix 的默认值，也是 MIUI 系统的实际取值。
+// 2. **不要描边**。miuix 卡片靠 `surfaceContainer`（纯白）与 `background`
+//    （米白）的底色差分层，不加边框。之前 0.30 的描边是为了补救
+//    Material 版几乎为零的层次感，现在底色差够明显，描边反而多余。
+// 3. **内边距 20dp → 16dp**。miuix 的密度比 Material 略紧，
+//    20dp 会让内容显得松散；16dp 与系统设置页对齐。
+//
+// 注意 `insideMargin` 是 miuix Card 自带的参数，不要再在外面套 padding，
+// 否则会叠加成 32dp。
 @Composable
 fun SoftCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val shape = RoundedCornerShape(20.dp)
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .border(
-                width = 1.dp,
-                // v2.7.4：0.18f -> 0.30f。
-                // 实测 0.18 叠在白卡(#FFFFFF)与米白底(#FAF8F5)之间，
-                // 边界对比度约 1.06:1，接近不可见（低亮度屏尤其明显）。
-                // 0.30 提升到约 1.25:1，仍属柔和描边，但卡片的"边界"能看出来了。
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.30f),
-                shape = shape
-            )
-            .padding(20.dp),
-        content = content
-    )
+    MiuixCard(
+        modifier = modifier.fillMaxWidth(),
+        cornerRadius = 16.dp,
+        insideMargin = PaddingValues(16.dp),
+    ) {
+        content()
+    }
 }
 
 // 提醒开关卡片

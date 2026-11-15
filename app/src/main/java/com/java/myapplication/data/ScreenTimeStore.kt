@@ -43,6 +43,10 @@ object ScreenTimeStore {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
             ?: return false
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // compileSdk 37 起 unsafeCheckOpNoThrow 被标记为 deprecated，
+            // 官方建议改用 `checkOpNoThrow(String, int, String)` 的新重载。
+            // 但那个重载要求 API 29+，与这里的 Q 分支一致，直接换掉即可。
+            @Suppress("DEPRECATION")
             appOps.unsafeCheckOpNoThrow(
                 AppOpsManager.OPSTR_GET_USAGE_STATS,
                 Process.myUid(),

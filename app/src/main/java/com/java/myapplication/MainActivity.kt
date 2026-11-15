@@ -14,7 +14,7 @@ import androidx.compose.runtime.getValue
 import com.java.myapplication.notify.RestNotifier
 import com.java.myapplication.ui.EyeCareApp
 import com.java.myapplication.ui.EyeCareViewModel
-import com.java.myapplication.ui.theme.MyApplicationTheme
+import com.java.myapplication.ui.theme.EyeCareMiuixTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
                     }
                 )
             }
-            MyApplicationTheme(autoNight = autoNight) {
+            EyeCareMiuixTheme(autoNight = autoNight) {
                 EyeCareApp()
             }
         }
