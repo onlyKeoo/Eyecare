@@ -400,8 +400,21 @@ private fun SettingsGroupCard(
             color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
             modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
         )
+        // v2.10.1：补上卡片内边距。
+        //
+        // 上一版 HyperOsGroupCard 内部是**零内距**的 —— 这个组件设计给
+        // HyperOsRow 用（行自带 18dp 水平内距），但设置页的这些行
+        // （NumberSettingRow / SwitchSettingRow / 音源选择）都是自定义 Row，
+        // 没有自己的内距，于是文字直接贴到卡片圆角上。
+        //
+        // 修法：在这里统一给 18dp 水平内距 + 12dp 垂直内距，
+        // 行与行之间再留 14dp，避免多行挤成一坨。
+        // 注意不要再给 HyperOsRow 加水平内距的容器，否则会叠成 36dp。
         HyperOsGroupCard {
-            Column(modifier = Modifier.padding(vertical = 6.dp)) {
+            Column(
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
                 content()
             }
         }
