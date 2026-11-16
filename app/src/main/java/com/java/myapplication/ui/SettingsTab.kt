@@ -51,6 +51,13 @@ import com.java.myapplication.notify.RestSoundPlayer
 import com.java.myapplication.notify.RestSoundSource
 import com.java.myapplication.ui.components.EyeIcons
 import com.java.myapplication.ui.components.HyperOsGroupCard
+import com.java.myapplication.ui.components.HyperOsRowDivider
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import com.java.myapplication.ui.components.HyperOsRow
 import com.java.myapplication.ui.components.HyperOsRowDivider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -71,6 +78,21 @@ import kotlinx.coroutines.launch
  * 数字项改成「−/＋」步进器（按住可连点），免打扰时间改用系统风格时间选择器，
  * 每次落盘都回一条 Snackbar，让「即时生效」看得见。
  */
+/**
+ * 设置页的页面标识（v2.11.0）。
+ *
+ * 之前所有设置在同一个长页面里，现在改成「主页入口 → 分类页」。
+ * [title] 同时用作二级页的顶部标题。
+ */
+private enum class SettingsPage(val title: String) {
+    HOME(""),
+    TIMING("计时"),
+    REMINDER("提醒"),
+    SIT("久坐"),
+    APPEARANCE("外观"),
+    ABOUT("关于"),
+}
+
 @Composable
 fun SettingsTab(
     viewModel: EyeCareViewModel,
@@ -82,6 +104,14 @@ fun SettingsTab(
     var showFullScreenConfirm by remember { mutableStateOf(false) }
     // 连点型设置（步进器）的待播报文案：等用户停下来再回一条，避免 Snackbar 以 ~11Hz 反复重放
     var pendingAnnounce by remember { mutableStateOf<String?>(null) }
+    // v2.11.0：当前所在的设置子页。HOME = 入口列表，其余为分类页。
+    // 用 rememberSaveable 以便横竖屏切换、深色模式切换时不丢位置。
+    var page by rememberSaveable { mutableStateOf(SettingsPage.HOME) }
+
+    // 系统返回键：在子页时回首页，在首页时交给系统（退出应用/切到别的 tab）
+    BackHandler(enabled = page != SettingsPage.HOME) {
+        page = SettingsPage.HOME
+    }
     val s = viewModel.settings
     val scope = rememberCoroutineScope()
 
@@ -116,25 +146,29 @@ fun SettingsTab(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .imePadding()
-            .padding(horizontal = 24.dp, vertical = 20.dp)
-    ) {
-        // v2.10.0（HyperOS 版式）：34sp Bold 大标题，与另外两页同一基准。
-        Text(
-            text = "护眼设置",
-            fontSize = 34.sp,
-            fontWeight = FontWeight.Bold,
-            color = MiuixTheme.colorScheme.onBackground,
+    // v2.11.0（HyperOS 二级页结构）：设置主页只放入口，点进去才是具体设置。
+    //
+    // 为什么改：原来 13 个设置项全部铺在一页上，需要一直往下滚；
+    // HyperOS 的系统设置是「主页若干入口 → 点进去是这一类」。
+    // 已确认：首页不留任何开关、外观独立一页、自检与关于放首页底部。
+    //
+    // 导航用最简单的状态机（一个 enum + when），不引入 navigation 库 ——
+    // 只有 6 个页面、没有深链接、没有多返回栈需求，navigation 反而更重。
+    // 返回键由 BackHandler 接管，非首页时回到首页。
+    when (page) {
+        SettingsPage.HOME -> SettingsHomePage(
+            versionName = AppInfo.versionName(context),
+            onOpen = { target -> page = target },
+            onOpenDiagnostics = { showDiagnostics = true },
+            onOpenAbout = { page = SettingsPage.ABOUT },
         )
 
-        Spacer(Modifier.height(20.dp))
-
+        SettingsPage.TIMING -> SettingsSubPage(
+            title = SettingsPage.TIMING.title,
+            onBack = { page = SettingsPage.HOME },
+        ) {
         // ---------------- 计时 ----------------
-        SettingsGroupCard(title = "计时") {
+        SettingsGroupCard(title = "计时", showTitle = false) {
             MinuteSettingRow(
                 label = "用眼提醒间隔",
                 value = s.workMinutes,
@@ -168,10 +202,14 @@ fun SettingsTab(
 
         // 组间 24dp（组内 16dp）：两档间距让「卡与卡」和「行与行」在节奏上可分，
         // 原先全部 14dp 时整列像一块连片的砖，扫读时找不到分组边界。
-        Spacer(Modifier.height(24.dp))
+        }
 
+        SettingsPage.REMINDER -> SettingsSubPage(
+            title = SettingsPage.REMINDER.title,
+            onBack = { page = SettingsPage.HOME },
+        ) {
         // ---------------- 提醒 ----------------
-        SettingsGroupCard(title = "提醒") {
+        SettingsGroupCard(title = "提醒", showTitle = false) {
             SwitchSettingRow(
                 title = "到点自动全屏",
                 // v2.7.8：原副标题「用眼到点时直接弹出全屏休息页（后台也不会漏）；
@@ -262,11 +300,14 @@ fun SettingsTab(
                 )
             }
         }
+        }
 
-        Spacer(Modifier.height(24.dp))
-
+        SettingsPage.SIT -> SettingsSubPage(
+            title = SettingsPage.SIT.title,
+            onBack = { page = SettingsPage.HOME },
+        ) {
         // ---------------- 久坐 ----------------
-        SettingsGroupCard(title = "久坐") {
+        SettingsGroupCard(title = "久坐", showTitle = false) {
             SwitchSettingRow(
                 title = "久坐提醒",
                 // v2.7.8：删掉「按间隔提醒起身活动」（标题已说明），
@@ -301,11 +342,14 @@ fun SettingsTab(
                 }
             }
         }
+        }
 
-        Spacer(Modifier.height(24.dp))
-
+        SettingsPage.APPEARANCE -> SettingsSubPage(
+            title = SettingsPage.APPEARANCE.title,
+            onBack = { page = SettingsPage.HOME },
+        ) {
         // ---------------- 外观 ----------------
-        SettingsGroupCard(title = "外观") {
+        SettingsGroupCard(title = "外观", showTitle = false) {
             SwitchSettingRow(
                 title = "自动夜间模式",
                 // v2.7.8：「自动」已在标题里，副标题只交代它跟随什么。
@@ -316,41 +360,15 @@ fun SettingsTab(
                 }
             )
         }
-
-        Spacer(Modifier.height(24.dp))
-
-        // 提醒可靠性自检入口：提醒不准时，用户自己就能查原因
-        SoftCard {
-            Text(
-                "提醒可靠性自检",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.height(4.dp))
-            // v2.7.8：原句把五项检查逐一列出（通知权限、精确闹钟、悬浮窗、
-            // 电池优化、自启动），但点进去的面板本身就是这张清单 —— 等于目录抄了一遍正文。
-            Text(
-                "提醒不准时时，逐项检查系统权限与电池设置",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = { showDiagnostics = true },
-                shape = CircleShape,
-                colors = previewButtonColors(),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("开始自检")
-            }
         }
 
-        Spacer(Modifier.height(24.dp))
+        SettingsPage.ABOUT -> SettingsSubPage(
+            title = SettingsPage.ABOUT.title,
+            onBack = { page = SettingsPage.HOME },
+        ) {
+            AboutCard()
+        }
 
-        // 关于：版本号、开源仓库、免责声明
-        AboutCard()
-
-        Spacer(Modifier.height(24.dp))
     }
 
     if (showDiagnostics) {
@@ -386,20 +404,25 @@ fun SettingsTab(
 @Composable
 private fun SettingsGroupCard(
     title: String,
+    showTitle: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
+        // 二级页里 showTitle = false：顶部栏已经写着分类名，
+        // 卡内再重复一次组名就是同义反复（DESIGN.md 第 1 条）。
         // v2.10.0（HyperOS 版式）：组名搬到卡片**外面**的左上角。
         // Material 是「彩色小标题写在卡内首行」，HyperOS 是「卡外灰色组名」，
         // 这是它最容易被认出的版式特征。颜色改中性灰：
         // 满屏绿色小标题会让页面发花，主色该留给开关和按钮。
-        Text(
-            text = title,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
-            modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
-        )
+        if (showTitle) {
+            Text(
+                text = title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
+                modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
+            )
+        }
         // v2.10.1：补上卡片内边距。
         //
         // 上一版 HyperOsGroupCard 内部是**零内距**的 —— 这个组件设计给
@@ -1139,6 +1162,171 @@ private fun SwitchSettingRow(
 }
 
 /**
+ * 设置主页（v2.11.0）。
+ *
+ * 只有入口，不放任何可直接拨动的开关 —— 这是用户明确要求的结构：
+ * 「分为好几个菜单，点进去就进入一个专门设置这个分类的页面」。
+ *
+ * 结构：大标题 → 4 个分类入口 → 自检/关于 → 底部留白。
+ * 每个入口都是「标题 + 当前摘要 + 右箭头」，摘要让用户不用点进去
+ * 就能看到关键值（比如间隔多少分钟），减少无效点击。
+ */
+@Composable
+private fun SettingsHomePage(
+    versionName: String,
+    onOpen: (SettingsPage) -> Unit,
+    onOpenDiagnostics: () -> Unit,
+    onOpenAbout: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 20.dp)
+    ) {
+        Text(
+            text = "护眼设置",
+            fontSize = 34.sp,
+            fontWeight = FontWeight.Bold,
+            color = MiuixTheme.colorScheme.onBackground,
+        )
+
+        Spacer(Modifier.height(20.dp))
+
+        HyperOsGroupCard {
+            HyperOsRow(
+                title = "计时",
+                subtitle = "提醒间隔、休息时长、每日目标",
+                showChevron = true,
+                onClick = { onOpen(SettingsPage.TIMING) },
+            )
+            HyperOsRowDivider()
+            HyperOsRow(
+                title = "提醒",
+                subtitle = "全屏提醒、返回原应用、免打扰、提示音",
+                showChevron = true,
+                onClick = { onOpen(SettingsPage.REMINDER) },
+            )
+            HyperOsRowDivider()
+            HyperOsRow(
+                title = "久坐",
+                subtitle = "按间隔提醒起身活动",
+                showChevron = true,
+                onClick = { onOpen(SettingsPage.SIT) },
+            )
+            HyperOsRowDivider()
+            HyperOsRow(
+                title = "外观",
+                subtitle = "跟随系统的深浅色",
+                showChevron = true,
+                onClick = { onOpen(SettingsPage.APPEARANCE) },
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        HyperOsGroupCard {
+            HyperOsRow(
+                title = "提醒可靠性自检",
+                subtitle = "提醒不准时，逐项检查系统权限与电池设置",
+                showChevron = true,
+                onClick = onOpenDiagnostics,
+            )
+            HyperOsRowDivider()
+            HyperOsRow(
+                title = "关于",
+                value = versionName,
+                showChevron = true,
+                onClick = onOpenAbout,
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * 二级设置页外壳（v2.11.0）。
+ *
+ * 顶部是「返回箭头 + 分类名」的紧凑标题栏，下面是可滚动的分类内容。
+ * 没有用 miuix 的 Scaffold/TopAppBar：那两者都自带 WindowInsets 与
+ * 吸附行为，套在本项目的 Pager 里会重复吃掉状态栏高度；
+ * 这里只需要一条 52dp 的固定标题栏，手写更可控。
+ */
+@Composable
+private fun SettingsSubPage(
+    title: String,
+    onBack: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .imePadding()
+            .padding(horizontal = 24.dp, vertical = 20.dp)
+    ) {
+        // 标题栏：返回箭头 + 分类名
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = null,
+                        indication = null,
+                        onClick = onBack,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                BackArrowIcon()
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = title,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                color = MiuixTheme.colorScheme.onBackground,
+            )
+        }
+
+        Spacer(Modifier.height(18.dp))
+
+        content()
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/** 返回箭头：自绘，与项目图标体系一致（DESIGN.md：整个界面只用一套图标） */
+@Composable
+private fun BackArrowIcon() {
+    androidx.compose.foundation.Canvas(modifier = Modifier.size(20.dp)) {
+        val w = size.width
+        val h = size.height
+        val stroke = 2.dp.toPx()
+        val color = androidx.compose.ui.graphics.Color(0xFF2C3E33)
+        drawLine(
+            color = color,
+            start = androidx.compose.ui.geometry.Offset(w * 0.62f, h * 0.15f),
+            end = androidx.compose.ui.geometry.Offset(w * 0.28f, h * 0.5f),
+            strokeWidth = stroke,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round,
+        )
+        drawLine(
+            color = color,
+            start = androidx.compose.ui.geometry.Offset(w * 0.28f, h * 0.5f),
+            end = androidx.compose.ui.geometry.Offset(w * 0.62f, h * 0.85f),
+            strokeWidth = stroke,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round,
+        )
+    }
+}
+
+/**
  * 「关于」区块：版本号 + 开源仓库地址（可点击）+ 免责声明入口。
  *
  * 仓库地址同时提供纯文本与按钮两种入口：文本方便长按复制，按钮方便直接跳转。
@@ -1153,14 +1341,9 @@ private fun AboutCard() {
     val versionName = remember(context) { AppInfo.versionName(context) }
     // v2.6.14（临时诊断）：日志导出状态
 
+    // v2.11.0：卡内不再写「关于」标题 —— 它已经是二级页的顶部标题，
+    // 卡内再写一遍是同义反复（DESIGN.md 第 1 条：同义重复优先删）。
     SoftCard {
-        Text(
-            "关于",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Medium
-        )
-        Spacer(Modifier.height(10.dp))
         Text(
             "护眼时光 v$versionName",
             style = MaterialTheme.typography.bodyMedium,
