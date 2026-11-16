@@ -47,6 +47,9 @@ import com.java.myapplication.data.EyeTips
 import com.java.myapplication.ui.theme.*
 import top.yukonga.miuix.kmp.basic.Card as MiuixCard
 import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
+import com.java.myapplication.ui.components.HyperOsCardRadius
+import com.java.myapplication.ui.components.HyperOsGroupCard
+import com.java.myapplication.ui.components.HyperOsRow
 import kotlinx.coroutines.delay
 
 // 柔和卡片容器
@@ -54,9 +57,8 @@ import kotlinx.coroutines.delay
 // v2.10.0（ui-miuix）：改用 miuix 的 Card。
 //
 // 与手写版的三点差别，都是「MIUI 观感」的来源：
-// 1. **圆角 20dp → 24dp**。HyperOS 的卡片圆角明显大于 Material，
-//    24dp 才是「一眼 MIUI」的关键。第一轮误用了 miuix 默认的 16dp，
-//    比改造前还方，方向反了（已纠正）。
+// 1. **圆角统一到 26dp**（HyperOsCardRadius）。HyperOS 的卡片圆角明显大于
+//    Material；第一轮误用 miuix 默认的 16dp，比改造前还方，方向反了。
 // 2. **不要描边**。miuix 卡片靠 `surfaceContainer`（纯白）与 `background`
 //    （米白）的底色差分层，不加边框。
 //
@@ -69,7 +71,7 @@ fun SoftCard(
 ) {
     MiuixCard(
         modifier = modifier.fillMaxWidth(),
-        cornerRadius = 24.dp,
+        cornerRadius = HyperOsCardRadius,
         insideMargin = PaddingValues(18.dp),
     ) {
         content()
@@ -82,28 +84,20 @@ fun EyeCareSwitchCard(
     enabled: Boolean,
     onToggle: (Boolean) -> Unit
 ) {
-    SoftCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // v2.7.7（去冗余）：删掉「已开启，按时守护你的双眼 / 已关闭，暂时不提醒」。
-            // 开关本身就是状态的唯一表达，再加一句话是同义反复。
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "用眼提醒",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+    // v2.10.0（HyperOS 版式）：从「卡片里塞一个 Row」改为「分组卡 + 行」。
+    // 行高、内距、对齐全部由 HyperOsRow 统一控制，
+    // 于是它和设置页的列表行长得一模一样 —— 这才是 HyperOS 的一致性来源。
+    // 「用眼提醒」四个字已足以表达状态（开关自己就是状态），不加副标题。
+    HyperOsGroupCard {
+        HyperOsRow(
+            title = "用眼提醒",
+            trailing = {
+                MiuixSwitch(
+                    checked = enabled,
+                    onCheckedChange = onToggle,
                 )
-            }
-            // v2.10.0：换成 miuix Switch。与 Material3 的差别：
-            // 轨道更高更圆、滑块是纯白圆点、开启态轨道用主题 primary，
-            // 按下时轨道会有内缩反馈。这些是 MIUI 开关的辨识特征。
-            MiuixSwitch(
-                checked = enabled,
-                onCheckedChange = onToggle,
-            )
-        }
+            },
+        )
     }
 }
 

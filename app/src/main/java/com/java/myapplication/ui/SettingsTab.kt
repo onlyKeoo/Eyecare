@@ -50,6 +50,11 @@ import com.java.myapplication.data.AppSettings
 import com.java.myapplication.notify.RestSoundPlayer
 import com.java.myapplication.notify.RestSoundSource
 import com.java.myapplication.ui.components.EyeIcons
+import com.java.myapplication.ui.components.HyperOsGroupCard
+import com.java.myapplication.ui.components.HyperOsRow
+import com.java.myapplication.ui.components.HyperOsRowDivider
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
 import com.java.myapplication.ui.theme.EaseOutStrong
 import com.java.myapplication.ui.theme.MotionDurations
 import kotlin.math.abs
@@ -118,11 +123,12 @@ fun SettingsTab(
             .imePadding()
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
+        // v2.10.0（HyperOS 版式）：34sp Bold 大标题，与另外两页同一基准。
         Text(
-            "护眼设置",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onBackground
+            text = "护眼设置",
+            fontSize = 34.sp,
+            fontWeight = FontWeight.Bold,
+            color = MiuixTheme.colorScheme.onBackground,
         )
 
         Spacer(Modifier.height(20.dp))
@@ -382,15 +388,23 @@ private fun SettingsGroupCard(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    SoftCard {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // v2.10.0（HyperOS 版式）：组名搬到卡片**外面**的左上角。
+        // Material 是「彩色小标题写在卡内首行」，HyperOS 是「卡外灰色组名」，
+        // 这是它最容易被认出的版式特征。颜色改中性灰：
+        // 满屏绿色小标题会让页面发花，主色该留给开关和按钮。
         Text(
-            title,
-            style = MaterialTheme.typography.labelLarge,
+            text = title,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.primary
+            color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
+            modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
         )
-        Spacer(Modifier.height(16.dp))
-        content()
+        HyperOsGroupCard {
+            Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                content()
+            }
+        }
     }
 }
 
@@ -1102,12 +1116,11 @@ private fun SwitchSettingRow(
             }
         }
         Spacer(Modifier.width(8.dp))
-        Switch(
+        // v2.10.0：与计时页、报告页统一用 miuix Switch，
+        // 保证同一个「开关」在两页长得一模一样。
+        MiuixSwitch(
             checked = checked,
             onCheckedChange = onChecked,
-            colors = SwitchDefaults.colors(
-                checkedTrackColor = MaterialTheme.colorScheme.primary
-            )
         )
     }
 }

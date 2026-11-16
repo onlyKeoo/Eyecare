@@ -41,6 +41,10 @@ import com.java.myapplication.data.ScreenTimeStore
 import com.java.myapplication.data.StatsStore
 import com.java.myapplication.notify.RestNotifier
 import com.java.myapplication.ui.components.DailyBarChart
+import com.java.myapplication.ui.components.HyperOsSegmented
+import com.java.myapplication.ui.components.HyperOsGroupCard
+import com.java.myapplication.ui.components.HyperOsRow
+import com.java.myapplication.ui.components.HyperOsRowDivider
 import com.java.myapplication.ui.components.EyeIcons
 import com.java.myapplication.ui.components.EyeProgressRing
 import com.java.myapplication.ui.theme.*
@@ -308,10 +312,16 @@ private fun TimerTab(
         // 这是 MIUI/HyperOS「大标题」的取值，与 Material3 的 headlineLarge 同号，
         // 但字重和字距按 miuix 的规范走。用 MiuixTheme.textStyles 取，
         // 保证以后统一调字号时不用改每一处。
+        // v2.10.0（HyperOS 版式）：页面标题放大到 34sp 并加粗。
+        //
+        // HyperOS 的页面标题比 Material 的 headline 更大更重（34sp / Bold），
+        // 且紧贴上沿、与内容之间留 18dp —— 这是「大标题」层级的来源。
+        // 之前用 32sp Medium，和小米系统里的观感差一档。
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = "护眼时光",
-                style = MiuixTheme.textStyles.title1,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Bold,
                 color = MiuixTheme.colorScheme.onBackground,
             )
         }
@@ -349,11 +359,14 @@ private fun TimerTab(
 
         // 眼眸进度环
         Box(contentAlignment = Alignment.Center) {
+            // v2.10.0：环加大到 236dp、描边收细到 14dp。
+            // HyperOS 的进度环特征是「大而细」——环占的版面大，但笔画轻，
+            // 视觉重心落在中间的数字上。原来是 220dp/20dp，偏「粗壮」。
             EyeProgressRing(
                 progress = viewModel.workProgress,
-                size = 220.dp,
-                strokeWidth = 20.dp,
-                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                size = 236.dp,
+                strokeWidth = 14.dp,
+                trackColor = MiuixTheme.colorScheme.onBackground.copy(alpha = 0.07f)
             )
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -374,9 +387,9 @@ private fun TimerTab(
                 // 十位字宽变化会让整串左右抖一下，每秒一次很扎眼。
                 Text(
                     text = viewModel.formatTime(viewModel.elapsedSeconds),
-                    fontSize = 40.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = 46.sp,
+                    fontWeight = FontWeight.Light,
+                    color = MiuixTheme.colorScheme.onBackground,
                     style = LocalTextStyle.current.copy(
                         fontFeatureSettings = "tnum",
                         letterSpacing = 1.sp
@@ -394,8 +407,8 @@ private fun TimerTab(
                     // 倒计时信息移到环外说明行，那里没有宽度约束。
                     if (viewModel.pausedByScreenOff) "息屏已暂停"
                     else "本轮已用",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceContainerVariant
                 )
             }
         }
@@ -430,26 +443,26 @@ private fun TimerTab(
         // 主流程是到点自动弹全屏休息页，这个按钮只是**手动提前休息**的入口，
         // 却占了整行宽度 + 最高饱和度主色，视觉权重压过进度环本身，
         // 让人误以为它是本页的主行动。降级后环才是唯一视觉主体。
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            // v2.10.0：换成 miuix 的描边按钮。
-            // 形态与 Material3 的 OutlinedButton 相近，但有三处 MIUI 特征：
-            // 圆角固定 16dp（不是全圆胶囊）、内边距更紧、按下时整体缩放并变淡。
-            MiuixTextButton(
-                onClick = { viewModel.startRest(context) },
-                cornerRadius = 22.dp,
-                minWidth = 148.dp,
-                minHeight = 44.dp,
-                colors = ButtonDefaults.buttonColors(
-                    color = MiuixTheme.colorScheme.secondaryVariant,
-                    contentColor = MiuixTheme.colorScheme.primary,
-                ),
-            ) {
-                Text(
-                    "现在休息一下",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
+        // v2.10.0（HyperOS 版式）：按钮改为**全宽 52dp**、26dp 圆角。
+        //
+        // HyperOS 的次级按钮就是「整行宽 + 浅灰底 + 品牌色文字」，
+        // 而不是居中小胶囊。全宽还有一个好处：它和上下两张卡片的左右边缘对齐，
+        // 整页形成一条统一的左右基准线。
+        MiuixTextButton(
+            onClick = { viewModel.startRest(context) },
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 26.dp,
+            minHeight = 52.dp,
+            colors = ButtonDefaults.buttonColors(
+                color = MiuixTheme.colorScheme.secondaryContainer,
+                contentColor = MiuixTheme.colorScheme.primary,
+            ),
+        ) {
+            Text(
+                "现在休息一下",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+            )
         }
 
         Spacer(Modifier.height(24.dp))
@@ -568,25 +581,25 @@ private fun ReportTab(viewModel: EyeCareViewModel, context: Context) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
+        // v2.10.0（HyperOS 版式）：标题 34sp Bold，与计时页同一基准。
         Text(
-            "数据报告",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onBackground
+            text = "数据报告",
+            fontSize = 34.sp,
+            fontWeight = FontWeight.Bold,
+            color = MiuixTheme.colorScheme.onBackground,
         )
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // 日 / 周 / 月 切换
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ReportRange.entries.forEach { r ->
-                FilterChip(
-                    selected = range == r,
-                    onClick = { range = r },
-                    label = { Text(r.label) }
-                )
-            }
-        }
+        // v2.10.0：日/周/月 从「三个 FilterChip 并排」改为 HyperOS 的胶囊分段控件。
+        // FilterChip 是 Material 的形态（独立描边小片），HyperOS 用一颗胶囊内嵌
+        // 白色滑块表示选中 —— 这是它最标志性的控件之一。
+        HyperOsSegmented(
+            options = ReportRange.entries.map { it.label },
+            selectedIndex = range.ordinal,
+            onSelect = { range = ReportRange.entries[it] },
+            modifier = Modifier.fillMaxWidth(),
+        )
 
         Spacer(Modifier.height(20.dp))
 
