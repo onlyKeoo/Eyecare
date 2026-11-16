@@ -249,10 +249,7 @@ fun EyeCareApp(viewModel: EyeCareViewModel = viewModel()) {
                 )
             },
             confirmButton = {
-                Button(
-                    onClick = { viewModel.startRest(context) },
-                    shape = CircleShape
-                ) {
+                TextButton(onClick = { viewModel.startRest(context) }) {
                     Text("开始休息")
                 }
             },

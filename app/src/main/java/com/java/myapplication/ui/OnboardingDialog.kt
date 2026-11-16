@@ -79,10 +79,10 @@ fun OnboardingDialog(onFinish: () -> Unit) {
             }
         },
         confirmButton = {
-            Button(
-                onClick = { if (step == 0) step = 1 else onFinish() },
-                shape = CircleShape
-            ) {
+            // v2.11.2：对话框内的按钮改成纯文字按钮。
+            // HyperOsAlertDialog 已经在外层给了浅灰胶囊底色，
+            // 里面再放实心 Button 会变成"灰胶囊里套绿胶囊"的双层背景。
+            TextButton(onClick = { if (step == 0) step = 1 else onFinish() }) {
                 Text(if (step == 0) "我已知悉，继续" else "完成")
             }
         },
@@ -178,7 +178,7 @@ fun DisclaimerDialog(onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss, shape = CircleShape) { Text("知道了") }
+            TextButton(onClick = onDismiss) { Text("知道了") }
         }
     )
 }

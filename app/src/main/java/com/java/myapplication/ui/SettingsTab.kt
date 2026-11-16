@@ -64,6 +64,10 @@ import com.java.myapplication.ui.components.HyperOsRowDivider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
 import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.basic.Button as MiuixButton
+import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
+import top.yukonga.miuix.kmp.basic.TextButton as MiuixTextButton
+import com.java.myapplication.ui.components.HyperOsSegmented
 import com.java.myapplication.ui.theme.EaseOutStrong
 import com.java.myapplication.ui.theme.MotionDurations
 import kotlin.math.abs
@@ -328,20 +332,19 @@ fun SettingsTab(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
-                Row(
+                // v2.11.2：FilterChip（Material 的独立描边小片）换成 HyperOS 的胶囊分段。
+                // 三个互斥选项正是分段控件的适用场景；FilterChip 那种"可选可取消"的
+                // 语义在这里也不对 —— 间隔必须选一个，不能取消。
+                HyperOsSegmented(
+                    options = AppSettings.SIT_INTERVAL_CHOICES.map { "$it 分钟" },
+                    selectedIndex = AppSettings.SIT_INTERVAL_CHOICES
+                        .indexOf(s.sitIntervalMinutes).coerceAtLeast(0),
+                    onSelect = { idx ->
+                        val minutes = AppSettings.SIT_INTERVAL_CHOICES[idx]
+                        update({ it.copy(sitIntervalMinutes = minutes) }, "久坐提醒间隔：$minutes 分钟")
+                    },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    AppSettings.SIT_INTERVAL_CHOICES.forEach { minutes ->
-                        FilterChip(
-                            selected = s.sitIntervalMinutes == minutes,
-                            onClick = {
-                                update({ it.copy(sitIntervalMinutes = minutes) }, "久坐提醒间隔：$minutes 分钟")
-                            },
-                            label = { Text("$minutes 分钟") }
-                        )
-                    }
-                }
+                )
             }
         }
         }
@@ -721,14 +724,17 @@ private fun MinuteSettingRow(
         // 三者一起超过行宽后，weight(1f) 的标签会被压到只剩一个字符宽 ——
         // 表现就是「用眼提醒间隔」竖着排成六行。外层固定宽度则没有这个叠加问题。
         Box(modifier = Modifier.width(RightControlWidth)) {
-            OutlinedButton(
+            // v2.11.2：值显示按钮换成 miuix 的次级按钮（浅灰底 + 深色字），
+            // 与设置页其他可点元素统一。按下时整块缩放变淡。
+            MiuixButton(
                 onClick = {
                     draft = value
                     showPicker = true
                 },
-                shape = RoundedCornerShape(16.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                modifier = Modifier.fillMaxWidth()
+                cornerRadius = 16.dp,
+                minHeight = 44.dp,
+                modifier = Modifier.fillMaxWidth(),
+                colors = MiuixButtonDefaults.buttonColors(),
             ) {
                 Text(
                     text = "$value 分钟",
@@ -792,15 +798,16 @@ private fun HourMinuteSettingRow(
         Spacer(Modifier.width(12.dp))
         // 同 MinuteSettingRow：宽度约束加在外层，避免与按钮自身 minWidth 叠加
         Box(modifier = Modifier.width(RightControlWidth)) {
-            OutlinedButton(
+            MiuixButton(
                 onClick = {
                     draftHour = value / 60
                     draftMinute = value % 60
                     showPicker = true
                 },
-                shape = RoundedCornerShape(16.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                modifier = Modifier.fillMaxWidth()
+                cornerRadius = 16.dp,
+                minHeight = 44.dp,
+                modifier = Modifier.fillMaxWidth(),
+                colors = MiuixButtonDefaults.buttonColors(),
             ) {
                 Text(
                     text = "${value / 60} 小时 ${value % 60} 分",
@@ -997,11 +1004,12 @@ private fun TimeSettingField(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(6.dp))
-        OutlinedButton(
+        MiuixButton(
             onClick = { showPicker = true },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+            cornerRadius = 16.dp,
+            minHeight = 44.dp,
+            colors = MiuixButtonDefaults.buttonColors(),
         ) {
             Text(
                 text = AppSettings.formatMinuteOfDay(minuteOfDay),

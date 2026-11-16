@@ -95,7 +95,7 @@ fun DiagnosticsPanel(onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss) { Text("知道了") }
+            TextButton(onClick = onDismiss) { Text("知道了") }
         },
         dismissButton = {
             TextButton(onClick = { refreshTick++ }) { Text("重新检测") }

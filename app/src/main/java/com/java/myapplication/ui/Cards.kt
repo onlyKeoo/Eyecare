@@ -47,6 +47,11 @@ import com.java.myapplication.data.EyeTips
 import com.java.myapplication.ui.theme.*
 import top.yukonga.miuix.kmp.basic.Card as MiuixCard
 import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
+import top.yukonga.miuix.kmp.basic.Button as MiuixButton
+import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
+import top.yukonga.miuix.kmp.basic.LinearProgressIndicator as MiuixLinearProgressIndicator
+import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.java.myapplication.ui.components.HyperOsCardRadius
 import com.java.myapplication.ui.components.HyperOsGroupCard
 import com.java.myapplication.ui.components.HyperOsRow
@@ -484,16 +489,19 @@ fun TodayWorkSummaryCard(
 
             Spacer(Modifier.height(14.dp))
 
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(10.dp)
-                    .clip(RoundedCornerShape(5.dp)),
-                color = if (overGoal) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+            // v2.11.2（HyperOS）：换成 miuix 的 LinearProgressIndicator。
+            // miuix 的进度条是**细长圆头**的形态（默认高度 4dp 级别），
+            // 而这里承载的是"今日目标完成度"，需要一定视觉重量，
+            // 所以显式给 height = 10dp，其余交给组件自己画。
+            MiuixLinearProgressIndicator(
+                progress = progress,
+                height = 10.dp,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                    foregroundColor = if (overGoal) MiuixTheme.colorScheme.error
+                    else MiuixTheme.colorScheme.primary,
+                    backgroundColor = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                ),
             )
 
             Spacer(Modifier.height(6.dp))
@@ -539,10 +547,13 @@ fun TodayWorkSummaryCard(
 
             if (onRequestScreenTime != null) {
                 Spacer(Modifier.height(12.dp))
-                Button(
+                // v2.11.2：主行动按钮用 miuix 的填充按钮（buttonColorsPrimary），
+                // 与休息页的两个按钮同一种形态。
+                MiuixButton(
                     onClick = onRequestScreenTime,
-                    shape = CircleShape,
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp)
+                    cornerRadius = 20.dp,
+                    minHeight = 42.dp,
+                    colors = MiuixButtonDefaults.buttonColorsPrimary(),
                 ) {
                     Text("去开启", fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 }

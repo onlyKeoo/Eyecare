@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import top.yukonga.miuix.kmp.basic.Button as MiuixButton
+import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -196,16 +198,19 @@ fun RestScreen(viewModel: EyeCareViewModel, context: Context) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(
+                // v2.11.2（HyperOS）：换成 miuix 的 Button。
+                // 圆角改为 24dp（胶囊形 48dp 高，与 HyperOS 大按钮一致），
+                // 按下时整体缩放变淡 —— 这是 miuix Button 自带的行为，
+                // Material3 的 Button 只有水波纹。
+                MiuixButton(
                     onClick = { viewModel.extendRest(context, 30) },
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = accentFill,
-                        contentColor = accentOnFill
+                    cornerRadius = 24.dp,
+                    minHeight = 48.dp,
+                    colors = MiuixButtonDefaults.buttonColorsPrimary(
+                        color = accentFill,
+                        contentColor = accentOnFill,
                     ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text(
                         "再休息 30 秒",
@@ -214,16 +219,15 @@ fun RestScreen(viewModel: EyeCareViewModel, context: Context) {
                 }
 
                 // 提前结束按钮
-                Button(
+                MiuixButton(
                     onClick = { viewModel.skipRest(context) },
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = accentFill,
-                        contentColor = accentOnFill
+                    cornerRadius = 24.dp,
+                    minHeight = 48.dp,
+                    colors = MiuixButtonDefaults.buttonColorsPrimary(
+                        color = accentFill,
+                        contentColor = accentOnFill,
                     ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text(
                         "我已休息好",
