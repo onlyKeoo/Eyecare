@@ -49,6 +49,7 @@ import com.java.myapplication.data.AppInfo
 import com.java.myapplication.data.AppSettings
 import com.java.myapplication.notify.RestSoundPlayer
 import com.java.myapplication.notify.RestSoundSource
+import com.java.myapplication.ui.components.HyperOsAlertDialog
 import com.java.myapplication.ui.components.EyeIcons
 import com.java.myapplication.ui.components.HyperOsGroupCard
 import com.java.myapplication.ui.components.HyperOsRowDivider
@@ -62,6 +63,7 @@ import com.java.myapplication.ui.components.HyperOsRow
 import com.java.myapplication.ui.components.HyperOsRowDivider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
+import top.yukonga.miuix.kmp.preference.SwitchPreference
 import com.java.myapplication.ui.theme.EaseOutStrong
 import com.java.myapplication.ui.theme.MotionDurations
 import kotlin.math.abs
@@ -377,7 +379,7 @@ fun SettingsTab(
 
     // 「到点自动全屏」二次确认（v2.4.2）：必须让用户明确知道会打断其他操作
     if (showFullScreenConfirm) {
-        AlertDialog(
+        HyperOsAlertDialog(
             onDismissRequest = { showFullScreenConfirm = false },
             title = { Text("开启「到点自动全屏」？") },
             text = {
@@ -656,7 +658,7 @@ private fun WheelPickerDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    HyperOsAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -815,7 +817,7 @@ private fun HourMinuteSettingRow(
     if (showPicker) {
         val total = draftHour * 60 + draftMinute
         val tooSmall = total < minTotalMinutes
-        AlertDialog(
+        HyperOsAlertDialog(
             onDismissRequest = { showPicker = false },
             title = { Text(label) },
             text = {
@@ -1015,7 +1017,7 @@ private fun TimeSettingField(
             initialMinute = minuteOfDay % 60,
             is24Hour = true
         )
-        AlertDialog(
+        HyperOsAlertDialog(
             onDismissRequest = { showPicker = false },
             title = { Text(label) },
             text = {
@@ -1133,32 +1135,22 @@ private fun SwitchSettingRow(
     onChecked: (Boolean) -> Unit,
     subtitle: String? = null
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            if (subtitle != null) {
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Spacer(Modifier.width(8.dp))
-        // v2.10.0：与计时页、报告页统一用 miuix Switch，
-        // 保证同一个「开关」在两页长得一模一样。
-        MiuixSwitch(
-            checked = checked,
-            onCheckedChange = onChecked,
-        )
-    }
+    // v2.11.0（按官方文档）：改用 miuix 官方的 SwitchPreference。
+    //
+    // 官方文档把 SwitchPreference 归类为「基于 BasicComponent 的开关组件」，
+    // 是设置页里开关项的标准做法。相比手写 Row + Switch，它额外处理了：
+    // 整行可点（不只是开关那个小圆点）、按下态反馈、禁用态透明度、
+    // 无障碍 role=Switch。这些是 HyperOS 交互规范的一部分。
+    SwitchPreference(
+        title = title,
+        summary = subtitle,
+        checked = checked,
+        onCheckedChange = onChecked,
+        // 外层 SettingsGroupCard 已经给了 18dp 水平内距与 14dp 行间距，
+        // 这里把 SwitchPreference 自带的 16dp 内距清零，
+        // 否则会叠成 34dp，行与行之间也会松成一片。
+        insideMargin = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+    )
 }
 
 /**

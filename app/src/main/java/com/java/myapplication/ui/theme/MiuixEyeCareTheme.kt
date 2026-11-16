@@ -1,38 +1,45 @@
 package com.java.myapplication.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme as materialDark
+import androidx.compose.material3.lightColorScheme as materialLight
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import top.yukonga.miuix.kmp.theme.ColorSchemeMode
+import top.yukonga.miuix.kmp.theme.Colors
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
 
 /**
- * miuix 配色（v2.10.0 / ui-miuix 分支）。
+ * 护眼主题（HyperOS / miuix）。
  *
- * ## 为什么不用 miuix 默认的蓝色
+ * ## 为什么用 ThemeController 而不是直接传 colors
  *
- * miuix 默认主色是 `#3482FF`（MIUI 蓝）。本项目是护眼工具，
- * 主色一直是原野绿 `#4CAF7D` —— 换成蓝色会丢掉「护眼」这个语义，
- * 而且绿→蓝是冷暖反转，用户第一眼会觉得「这不是同一个应用」。
+ * miuix 官方文档推荐用 `ThemeController(ColorSchemeMode.System)`：它会自己跟随
+ * 系统的深浅色切换，并把「当前是深色还是浅色」这件事统一管理。
+ * 直接传 `colors =` 的那个重载不会跟随系统，需要我们手工判断 `isSystemInDarkTheme()`，
+ * 还得自己处理系统切换时的重组 —— 那是重复实现库已经做好的事。
  *
- * 所以这里做的是「**保留品牌色，套用 miuix 的形态**」：
- * 圆角、间距、控件尺寸、动效全部交给 miuix，颜色仍是我们自己的绿。
+ * 本项目的「自动夜间模式」开关有两种状态：
+ * - 开启 → 跟随系统（`isDark = null`）
+ * - 关闭 → 强制浅色（`isDark = false`）
+ * 正好对应 controller 的 `isDark` 参数，不需要额外逻辑。
  *
- * ## 字段对应关系
+ * ## 为什么保留 Material3 主题
  *
- * miuix 的 Colors 有 50 多个字段，但真正影响观感的是这几组：
- * - `primary` / `onPrimary` —— 主按钮、开关打开态、滑块
- * - `background` / `surface` / `surfaceContainer` —— 页面底 / 卡片 / 悬浮层
- * - `onBackground` / `onSurfaceVariantSummary` —— 主文字 / 次要说明
- * - `outline` / `dividerLine` —— 描边 / 分割线
+ * 改造是分阶段的：设置页的数字滚轮、对话框等仍是 Material3 组件。
+ * 如果只提供 miuix 主题，那些组件会掉回 Material 默认的紫色系，整页配色会裂开。
  *
- * 其余字段（disabled*、slider*、tertiary*）用 miuix 默认值推导，
- * 因为它们的取值逻辑是「主色的淡化版」，手写反而容易配错。
+ * 所以这里把 miuix 的配色**镜像**成一套 Material3 colorScheme，
+ * 让两种组件读到的 primary / surface / onBackground 是同一批颜色。
+ * 等全部组件换成 miuix 后，这段可以整体删掉。
  */
-private fun eyeCareLightColors() = lightColorScheme(
-    // 主色：原野绿。开关打开、主按钮、进度环都用它
+private fun eyeCareLightColors(): Colors = lightColorScheme(
+    // 主色：原野绿。开关、主按钮、进度环都用它
     primary = GrassGreen,
     onPrimary = Color.White,
     primaryVariant = GrassGreenDark,
@@ -44,7 +51,6 @@ private fun eyeCareLightColors() = lightColorScheme(
     disabledPrimaryButton = Color(0xFFC5DDD0),
     disabledOnPrimaryButton = Color.White,
 
-    // 次要色：晨雾蓝。用于次级按钮、辅助强调
     secondary = Color(0xFFF0F0F0),
     onSecondary = Color(0xFF303030),
     secondaryVariant = Color(0xFFF5F5F5),
@@ -52,11 +58,9 @@ private fun eyeCareLightColors() = lightColorScheme(
     secondaryContainer = Color(0xFFF0F0F0),
     onSecondaryContainer = Color(0xFF9AA69E),
 
-    // 第三级：极淡的绿，用于「已选中」的背景块
     tertiaryContainer = Color(0xFFE8F3EC),
     onTertiaryContainer = GrassGreenDark,
 
-    // 页面底与卡片
     background = SoftIvory,
     onBackground = InkGray,
     onBackgroundVariant = InkGraySecondary,
@@ -67,25 +71,21 @@ private fun eyeCareLightColors() = lightColorScheme(
     onSurfaceContainer = InkGray,
     onSurfaceContainerVariant = InkGrayHint,
 
-    // 文字层级：主 / 次要 / 弱提示
     onSurfaceSecondary = Color(0xCC2C3E33),
     onSurfaceVariantSummary = Color(0x992C3E33),
     onSurfaceVariantActions = Color(0x662C3E33),
     disabledOnSurface = InkGrayHint,
 
-    // 描边与分割线：DESIGN.md 要求「卡片边界能看出来」，
-    // 这里给 outline 比 Material 版（alpha 0.30）稍实一点，
-    // 因为 miuix 卡片本身没有阴影，全靠这圈描边浮起来。
+    // 描边与分割线：miuix 的卡片没有阴影，层次全靠底色差 + 一圈极淡的线
     outline = Color(0xFFDCD6CD),
     dividerLine = Color(0xFFE8E3DB),
 
-    // 滑块与遮罩
     sliderKeyPoint = Color(0x4D4CAF7D),
     sliderKeyPointForeground = GrassGreen,
     windowDimming = Color.Black.copy(alpha = 0.3f),
 )
 
-private fun eyeCareDarkColors() = darkColorScheme(
+private fun eyeCareDarkColors(): Colors = darkColorScheme(
     primary = NightGreen,
     onPrimary = NightBackground,
     primaryVariant = Color(0xFF4E8A69),
@@ -122,7 +122,6 @@ private fun eyeCareDarkColors() = darkColorScheme(
     onSurfaceVariantActions = Color(0x66D9E3DC),
     disabledOnSurface = NightTextHint,
 
-    // 夜间描边：比日间更淡，否则深色底上会显得生硬
     outline = Color(0xFF3A4A42),
     dividerLine = Color(0xFF33423A),
 
@@ -132,32 +131,89 @@ private fun eyeCareDarkColors() = darkColorScheme(
 )
 
 /**
- * 护眼主题（miuix 版）。
+ * 把 miuix 的 Colors 映射成 Material3 的 ColorScheme。
  *
- * 与 Material3 版（[MyApplicationTheme]）并存：miuix 的组件读
- * `MiuixTheme.colorScheme`，Material3 的组件读 `MaterialTheme.colorScheme`，
- * 两套 CompositionLocal 互不干扰。改造期间页面里会同时出现两种组件，
- * 所以**两个主题都要包**，否则未改造的部分会掉回默认配色。
+ * 只映射实际会被读到的字段：primary / surface / background / outline 这几组。
+ * 其余留 Material 默认值 —— 它们只在 Material 组件的次要部位出现
+ * （如 ripple），不影响整体观感。
+ */
+private fun Colors.toMaterialLight() = materialLight(
+    primary = primary,
+    onPrimary = onPrimary,
+    primaryContainer = primaryContainer,
+    onPrimaryContainer = onPrimaryContainer,
+    secondary = MistBlue,
+    onSecondary = InkGray,
+    secondaryContainer = MistBlueLight,
+    onSecondaryContainer = InkGray,
+    tertiary = SunOrange,
+    onTertiary = SoftIvoryCard,
+    error = CoralRed,
+    onError = Color.White,
+    background = background,
+    onBackground = onBackground,
+    surface = background,
+    onSurface = onBackground,
+    surfaceVariant = surfaceContainer,
+    onSurfaceVariant = onBackgroundVariant,
+    outline = outline,
+)
+
+private fun Colors.toMaterialDark() = materialDark(
+    primary = primary,
+    onPrimary = onPrimary,
+    primaryContainer = primaryContainer,
+    onPrimaryContainer = onPrimaryContainer,
+    secondary = NightBlue,
+    onSecondary = NightBackground,
+    secondaryContainer = NightCard,
+    onSecondaryContainer = NightText,
+    tertiary = NightOrange,
+    onTertiary = NightBackground,
+    error = NightRed,
+    onError = NightBackground,
+    background = background,
+    onBackground = onBackground,
+    surface = surface,
+    onSurface = onBackground,
+    surfaceVariant = surfaceContainer,
+    onSurfaceVariant = onBackgroundVariant,
+    outline = outline,
+)
+
+/**
+ * 护眼主题。
  *
- * 等全部页面改完、Material3 依赖彻底移除后，这里可以只留 MiuixTheme。
- *
- * @param darkTheme 是否使用深色配色
- * @param autoNight 是否允许随系统深色状态自动切换。
- *        为 false 时强制使用浅色配色（设置页「自动夜间模式」关闭时的行为）。
+ * @param autoNight 设置页的「自动夜间模式」。
+ *        开启时跟随系统；关闭时强制浅色（这正是 [ThemeController.isDark] 的语义）。
+ *        注意：不需要再传 `darkTheme`，是否深色由 controller 自己算。
  */
 @Composable
 fun EyeCareMiuixTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     autoNight: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val useDark = autoNight && darkTheme
-    val miuixColors = if (useDark) eyeCareDarkColors() else eyeCareLightColors()
+    val light = remember { eyeCareLightColors() }
+    val dark = remember { eyeCareDarkColors() }
 
-    MiuixTheme(colors = miuixColors) {
-        // Material3 那一套继续保留：改造未完成的页面还在用它。
-        MyApplicationTheme(darkTheme = darkTheme, autoNight = autoNight) {
-            content()
-        }
+    val controller = remember(autoNight) {
+        ThemeController(
+            colorSchemeMode = ColorSchemeMode.System,
+            lightColors = light,
+            darkColors = dark,
+            // null = 跟随系统；false = 强制浅色
+            isDark = if (autoNight) null else false,
+        )
+    }
+
+    // 当前生效的是深色还是浅色 —— Material3 那一层要跟着同一个判断，
+    // 否则会出现「miuix 是深色、Material 组件还是浅色」的错位。
+    val useDark = if (autoNight) isSystemInDarkTheme() else false
+
+    MiuixTheme(controller = controller) {
+        MaterialTheme(
+            colorScheme = if (useDark) dark.toMaterialDark() else light.toMaterialLight(),
+            content = content,
+        )
     }
 }

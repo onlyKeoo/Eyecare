@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.java.myapplication.ui.components.HyperOsAlertDialog
 import com.java.myapplication.ui.components.EyeIcons
 import com.java.myapplication.notify.RestNotifier
 import com.java.myapplication.notify.RestOverlayService
@@ -57,7 +58,7 @@ fun DiagnosticsPanel(onDismiss: () -> Unit) {
     val items = remember(refreshTick) { collectDiagnostics(context) }
     val problems = items.count { !it.ok }
 
-    AlertDialog(
+    HyperOsAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
@@ -155,7 +156,7 @@ private fun LogActions(refreshTick: Int, onChanged: () -> Unit) {
     }
 
     if (confirmClear) {
-        AlertDialog(
+        HyperOsAlertDialog(
             onDismissRequest = { confirmClear = false },
             title = { Text("清空诊断日志？") },
             text = {

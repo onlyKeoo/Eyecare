@@ -1,88 +1,89 @@
 package com.java.myapplication.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.overlay.OverlayDialog
+
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * HyperOS 风格的基础版式组件（v2.10.0）。
+ * HyperOS 版式组件（v2.11.0）。
  *
- * ## 为什么要单独做一套
+ * ## 与上一版的区别：不再自己造行
  *
- * miuix 提供的是**原子组件**（Card / Switch / Button），但 HyperOS 的辨识度
- * 不在单个控件上，而在**版式**：大标题 → 分组卡片 → 卡内用发丝线分行的列表。
- * 只换组件不改版式，观感就会像「Material 换了个皮」——这也是前两轮失败的原因。
+ * 上一版我手写了 HyperOsRow（行高 56dp、内距 18dp、自绘箭头），
+ * 那是凭观感猜的。查官方文档后发现 miuix 已经提供了完全对应的组件：
  *
- * 这个文件把 HyperOS 的三件套抽出来：
- * - [HyperOsGroupCard]：一张卡里装若干行，行与行之间自动加发丝线
- * - [HyperOsRow]：左侧标签、右侧值/控件，可带箭头
- * - [HyperOsSegmented]：胶囊分段控件（用于日报表的日/周/月）
+ * - [BasicComponent] —— 官方文档称其为「基础标准组件」，
+ *   提供标题、摘要、左右自定义区，明确用于「列表项、设置项」
+ * - [ArrowPreference] —— 「基于 BasicComponent 的带箭头组件，指示可点击」
  *
- * ## 数值的来源
+ * 手写版最大的问题是**交互细节不对**：按下时的缩放、禁用态的透明度、
+ * 无障碍语义角色、行高与字号的比例关系，miuix 都按 HyperOS 规范处理过，
+ * 我自己写只能凑个大概。所以这里改成对官方组件的薄封装，
+ * 保留项目需要的参数名（title / subtitle / value / showChevron），
+ * 内部全部交给 miuix。
  *
- * 以下取值来自 HyperOS 的视觉规范：
- * - 卡片圆角 **26dp**（比 miuix 默认 16dp 明显更圆，是「一眼 HyperOS」的关键）
- * - 卡内行高 **56dp**（单行）/ 上下内距 16dp
- * - 发丝线宽度 **0.5dp**，左侧起点缩进 16dp（不贯通到卡片边缘）
- * - 卡片间距 **12dp**（组与组之间），标题与首卡之间 **16dp**
+ * 保留的唯一自绘是 [HyperOsSegmented] —— miuix 的 TabRow 是下划线样式，
+ * 与 HyperOS 的胶囊分段不是一回事。
  */
 
-/** HyperOS 卡片圆角：比 miuix 默认值更圆，是版式辨识度的核心 */
+/** HyperOS 卡片圆角：miuix Card 默认 16dp，HyperOS 实际更圆 */
 val HyperOsCardRadius: Dp = 26.dp
-
-/** 卡内单行的高度 */
-private val RowHeight: Dp = 56.dp
-
-/** 卡内容器的水平内距 */
-private val RowHorizontalPadding: Dp = 18.dp
 
 /**
  * 分组卡片：一张卡里装若干行。
  *
- * 行与行之间的发丝线由此处统一绘制，调用方不需要自己插 Divider ——
- * 这样既能保证「最后一行下面没有线」，也能保证所有卡片的线位置一致。
- *
- * @param rows 卡内的行，通常是一串 [HyperOsRow]
+ * 直接用 miuix 的 [Card]。`insideMargin` 给 0 —— 行自带内距，
+ * 卡片再加一层会变成两倍留白。
  */
 @Composable
 fun HyperOsGroupCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(HyperOsCardRadius))
-            .background(MiuixTheme.colorScheme.surfaceContainer),
-        content = content,
-    )
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        cornerRadius = HyperOsCardRadius,
+        insideMargin = PaddingValues(0.dp),
+    ) {
+        Column(content = content)
+    }
 }
 
 /**
- * 卡内一行：左标签、右侧内容。
+ * 卡内一行。
+ *
+ * 两种情况：
+ * - 需要右箭头（点进去跳到别的页面）→ 用官方 [ArrowPreference]
+ * - 其余（右侧是开关、数值、按钮）→ 用官方 [BasicComponent]，右侧内容走 endActions
  *
  * @param title 主标签
- * @param subtitle 副标签（可空）。按 DESIGN.md 的「删减优先」，
- *        只在「不看就猜不到的后果 / 默认值 / 相互关系」时才填
- * @param value 右侧显示的当前值（可空），用于「设置项 → 当前取值」这类行
- * @param showChevron 是否显示右箭头。凡点击后跳离当前页的行都该有
- * @param onClick 点击回调。为空时该行不可点，也不显示水波纹
- * @param trailing 右侧自定义内容（如开关、滑块），优先于 [value]
+ * @param subtitle 摘要。按 DESIGN.md「删减优先」，只在「不看就猜不到的后果 /
+ *        默认值 / 相互关系」时才填
+ * @param value 右对齐的当前值
+ * @param showChevron 是否显示右箭头
+ * @param onClick 点击回调
+ * @param trailing 右侧自定义内容（开关等），优先于 [value]
  */
 @Composable
 fun HyperOsRow(
@@ -94,101 +95,65 @@ fun HyperOsRow(
     onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(
-                if (onClick != null) {
-                    Modifier.clickable(
-                        // 关掉水波纹：HyperOS 的列表行是按下列表项缩放变暗，
-                        // 不是 Material 的圆形涟漪
-                        interactionSource = null,
-                        indication = null,
-                        onClick = onClick,
+    if (showChevron) {
+        ArrowPreference(
+            title = title,
+            modifier = modifier,
+            summary = subtitle,
+            endActions = {
+                if (value != null) {
+                    Text(
+                        text = value,
+                        style = MiuixTheme.textStyles.body1,
+                        color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
                     )
-                } else Modifier
-            )
-            .defaultMinSize(minHeight = RowHeight)
-            .padding(horizontal = RowHorizontalPadding, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MiuixTheme.textStyles.body1,
-                color = MiuixTheme.colorScheme.onSurfaceContainer,
-            )
-            if (subtitle != null) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = subtitle,
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
-                )
-            }
-        }
-
-        if (trailing != null) {
-            Spacer(Modifier.width(12.dp))
-            trailing()
-        } else if (value != null) {
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = value,
-                style = MiuixTheme.textStyles.body1,
-                color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
-            )
-        }
-
-        if (showChevron) {
-            Spacer(Modifier.width(6.dp))
-            ChevronIcon()
-        }
+                }
+                if (trailing != null) trailing()
+            },
+            onClick = onClick,
+        )
+    } else {
+        BasicComponent(
+            title = title,
+            modifier = modifier,
+            summary = subtitle,
+            endActions = {
+                if (trailing != null) {
+                    trailing()
+                } else if (value != null) {
+                    Text(
+                        text = value,
+                        style = MiuixTheme.textStyles.body1,
+                        color = MiuixTheme.colorScheme.onSurfaceContainerVariant,
+                    )
+                }
+            },
+            onClick = onClick,
+        )
     }
 }
 
-/** 行与行之间的发丝线。调用方在需要分隔的两行之间插一个即可 */
+/**
+ * 行与行之间的发丝线。
+ *
+ * 用 Material3 的 HorizontalDivider 而非 miuix 的 Divider：
+ * 前者能精确控制 0.5dp 与左侧缩进，后者不支持 inset。
+ * 这条线是视觉细节，不涉及交互，所以不算「混用两套组件」。
+ */
 @Composable
-fun HyperOsRowDivider() {
+fun HyperOsRowDivider(startInset: Dp = 16.dp) {
     HorizontalDivider(
-        modifier = Modifier.padding(start = RowHorizontalPadding),
+        modifier = Modifier.padding(start = startInset),
         thickness = 0.5.dp,
         color = MiuixTheme.colorScheme.dividerLine,
     )
 }
 
 /**
- * 右箭头。自绘而非用 miuix-icons：项目约定整个界面只用一套图标
- * （见 DESIGN.md「需要图标时用自绘矢量 EyeIcons」）。
- */
-@Composable
-private fun ChevronIcon() {
-    androidx.compose.foundation.Canvas(modifier = Modifier.size(14.dp)) {
-        val w = size.width
-        val h = size.height
-        val stroke = 1.6.dp.toPx()
-        drawLine(
-            color = Color(0xFF9AA69E),
-            start = androidx.compose.ui.geometry.Offset(w * 0.35f, h * 0.22f),
-            end = androidx.compose.ui.geometry.Offset(w * 0.68f, h * 0.5f),
-            strokeWidth = stroke,
-            cap = androidx.compose.ui.graphics.StrokeCap.Round,
-        )
-        drawLine(
-            color = Color(0xFF9AA69E),
-            start = androidx.compose.ui.geometry.Offset(w * 0.68f, h * 0.5f),
-            end = androidx.compose.ui.geometry.Offset(w * 0.35f, h * 0.78f),
-            strokeWidth = stroke,
-            cap = androidx.compose.ui.graphics.StrokeCap.Round,
-        )
-    }
-}
-
-/**
  * 胶囊分段控件（HyperOS 的「日 / 周 / 月」切换）。
  *
- * 与 Material 的 SegmentedButton 区别：整体是一颗胶囊，选中项是**内部的白胶囊**，
- * 未选中项没有边框。HyperOS 用它替代 Tab 栏。
+ * miuix 的 TabRow 是下划线样式，与 HyperOS 的「胶囊内嵌白色滑块」不是一回事，
+ * 官方也没有对应组件，所以这个保留自绘。
  *
  * @param options 选项文案
  * @param selectedIndex 当前选中下标
@@ -235,6 +200,69 @@ fun HyperOsSegmented(
                     },
                     textAlign = TextAlign.Center,
                 )
+            }
+        }
+    }
+}
+
+/**
+ * 对话框（v2.11.0）。
+ *
+ * ## 为什么做成兼容层
+ *
+ * 项目里原有 9 处 `AlertDialog`（Material3），签名是
+ * `onDismissRequest / title / text / confirmButton / dismissButton`。
+ * 如果逐处改写成 miuix 的 `OverlayDialog`，每处都要重排按钮布局，改动面大、易错。
+ *
+ * 这里做一个同签名的封装，内部换成 miuix 的 [OverlayDialog]，
+ * 于是调用处只需要把函数名换掉 —— 样式立刻变成 HyperOS，
+ * 但业务代码一行不动。
+ *
+ * miuix 的 OverlayDialog 要求被 miuix 的 Scaffold 包裹（它靠 MiuixPopupHost
+ * 承载浮层），本项目已在 EyeCareApp 里换过 Scaffold。
+ *
+ * @param title 标题内容（原 AlertDialog 的 title lambda）
+ * @param text 正文内容（原 text lambda）
+ * @param confirmButton 确认按钮（原样传入，通常是 TextButton）
+ * @param dismissButton 取消按钮，可空
+ */
+@Composable
+fun HyperOsAlertDialog(
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    title: (@Composable () -> Unit)? = null,
+    text: (@Composable () -> Unit)? = null,
+    dismissButton: (@Composable () -> Unit)? = null,
+    // 下面两个参数只为兼容原 Material3 调用处的具名传参，不生效：
+    // miuix 的 OverlayDialog 自己决定背景与圆角（走主题），
+    // 外部再传颜色/形状会破坏 HyperOS 的一致性。
+    @Suppress("UNUSED_PARAMETER")
+    containerColor: Color = Color.Unspecified,
+    @Suppress("UNUSED_PARAMETER")
+    shape: Shape = RectangleShape,
+) {
+    OverlayDialog(
+        show = true,
+        onDismissRequest = onDismissRequest,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (title != null) {
+                title()
+                Spacer(Modifier.height(10.dp))
+            }
+            if (text != null) {
+                text()
+                Spacer(Modifier.height(18.dp))
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (dismissButton != null) {
+                    Box(modifier = Modifier.weight(1f)) { dismissButton() }
+                }
+                Box(modifier = Modifier.weight(1f)) { confirmButton() }
             }
         }
     }

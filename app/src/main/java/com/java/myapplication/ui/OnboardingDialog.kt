@@ -1,5 +1,6 @@
 package com.java.myapplication.ui
 
+import com.java.myapplication.ui.components.HyperOsAlertDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -34,7 +35,7 @@ import com.java.myapplication.data.Disclaimer
 fun OnboardingDialog(onFinish: () -> Unit) {
     var step by remember { mutableStateOf(0) }
 
-    AlertDialog(
+    HyperOsAlertDialog(
         onDismissRequest = {
             // 第 0 步（免责声明）不允许点外部或按返回键绕过；第 1 步允许（等于「稍后设置」）
             if (step == 1) onFinish()
@@ -144,7 +145,7 @@ private fun SetupGuideStep() {
  */
 @Composable
 fun DisclaimerDialog(onDismiss: () -> Unit) {
-    AlertDialog(
+    HyperOsAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(24.dp),

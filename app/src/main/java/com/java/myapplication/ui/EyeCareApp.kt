@@ -40,6 +40,7 @@ import com.java.myapplication.data.OnboardingStore
 import com.java.myapplication.data.ScreenTimeStore
 import com.java.myapplication.data.StatsStore
 import com.java.myapplication.notify.RestNotifier
+import com.java.myapplication.ui.components.HyperOsAlertDialog
 import com.java.myapplication.ui.components.DailyBarChart
 import com.java.myapplication.ui.components.HyperOsSegmented
 import com.java.myapplication.ui.components.HyperOsGroupCard
@@ -137,8 +138,14 @@ fun EyeCareApp(viewModel: EyeCareViewModel = viewModel()) {
         }
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+    // v2.11.0（按 miuix 官方文档）：外层脚手架换成 miuix 的 Scaffold。
+    //
+    // 这不是「换个名字」：官方文档明确写着 OverlayDialog / OverlayDropdownPreference /
+    // OverlaySpinnerPreference / OverlayListPopup 等弹窗组件**必须**被 miuix Scaffold 包裹，
+    // 因为它们依赖它提供的 MiuixPopupHost 来承载浮层。后续把设置页的对话框、
+    // 音源下拉换成这套组件时，没有它跑不起来。
+    MiuixScaffold(
+        containerColor = MiuixTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             // v2.10.0（ui-miuix）：底部导航换成 miuix 的 NavigationBar。
@@ -232,7 +239,7 @@ fun EyeCareApp(viewModel: EyeCareViewModel = viewModel()) {
         LaunchedEffect(Unit) {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         }
-        AlertDialog(
+        HyperOsAlertDialog(
             onDismissRequest = { viewModel.postponeRest(context) },
             title = { Text("\uD83C\uDF3F 该让眼睛休息啦") },
             text = {
