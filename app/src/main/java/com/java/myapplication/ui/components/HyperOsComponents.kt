@@ -2,6 +2,7 @@ package com.java.myapplication.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.material3.HorizontalDivider
@@ -254,16 +255,61 @@ fun HyperOsAlertDialog(
                 text()
                 Spacer(Modifier.height(18.dp))
             }
+            // v2.11.1：按钮必须自己画底色。
+            //
+            // 上一版把调用方传来的 Material3 TextButton 直接摆进 Row，
+            // 而 TextButton 的背景是透明的 —— 结果对话框底部只剩两串绿字，
+            // 既没有 HyperOS 的浅灰按钮底，也没有明确的点击区域。
+            //
+            // 修法：在外面套一层带底色与圆角的容器。容器负责"长什么样"，
+            // 里面的 Button 只负责"点了干什么"，这样 9 处调用都不用改。
+            //
+            // 尺寸取 46dp 高、23dp 圆角 —— 与 HyperOS 对话框按钮一致（胶囊形，
+            // 不是直角矩形，也不是 Material 的 8dp 小圆角）。
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (dismissButton != null) {
-                    Box(modifier = Modifier.weight(1f)) { dismissButton() }
+                    DialogButtonSlot(
+                        modifier = Modifier.weight(1f),
+                        content = dismissButton,
+                    )
                 }
-                Box(modifier = Modifier.weight(1f)) { confirmButton() }
+                DialogButtonSlot(
+                    modifier = Modifier.weight(1f),
+                    content = confirmButton,
+                )
             }
+        }
+    }
+}
+
+/**
+ * 对话框里的一个按钮位（v2.11.1）。
+ *
+ * 只负责外观：46dp 高、胶囊圆角、浅灰底；点击逻辑由传入的 content 决定。
+ * 用 justify 居中的 Box 包裹，使内部的 Material TextButton 自然居中，
+ * 不必关心它是 TextButton 还是别的什么按钮。
+ */
+@Composable
+private fun DialogButtonSlot(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .height(46.dp)
+            .clip(RoundedCornerShape(23.dp))
+            .background(MiuixTheme.colorScheme.secondaryContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            content()
         }
     }
 }
