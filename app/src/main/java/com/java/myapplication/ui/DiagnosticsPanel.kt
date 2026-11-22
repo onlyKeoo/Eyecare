@@ -12,16 +12,19 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Info
+import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.java.myapplication.ui.components.HyperOsAlertDialog
-import com.java.myapplication.ui.components.EyeIcons
 import com.java.myapplication.notify.RestNotifier
 import com.java.myapplication.notify.RestOverlayService
 
@@ -58,49 +61,48 @@ fun DiagnosticsPanel(onDismiss: () -> Unit) {
     val items = remember(refreshTick) { collectDiagnostics(context) }
     val problems = items.count { !it.ok }
 
-    HyperOsAlertDialog(
+    top.yukonga.miuix.kmp.overlay.OverlayDialog(
+        show = true,
+        title = "提醒可靠性自检",
+        summary = if (problems == 0) "全部检查通过" else "有 $problems 项需要注意",
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-        title = {
-            Column {
-                Text(
-                    "提醒可靠性自检",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    if (problems == 0) "全部检查通过" else "有 $problems 项需要注意",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (problems == 0) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.error
-                )
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                items.forEach { item -> DiagRow(item) }
-                Text(
-                    "改过系统设置后，点「重新检测」刷新状态。",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                // 诊断日志操作区（v2.7.6）：导出给不接电脑的用户 + 清空重录
-                LogActions(refreshTick, onChanged = { refreshTick++ })
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("知道了") }
-        },
-        dismissButton = {
-            TextButton(onClick = { refreshTick++ }) { Text("重新检测") }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items.forEach { item -> DiagRow(item) }
+            top.yukonga.miuix.kmp.basic.Text(
+                text = "改过系统设置后，点「重新检测」刷新状态。",
+                style = MiuixTheme.textStyles.footnote2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+            // 诊断日志操作区（v2.7.6）：导出给不接电脑的用户 + 清空重录
+            LogActions(refreshTick, onChanged = { refreshTick++ })
         }
-    )
+        Spacer(Modifier.height(12.dp))
+        top.yukonga.miuix.kmp.basic.Button(
+            onClick = onDismiss,
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 20.dp,
+            minHeight = 44.dp,
+            colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColorsPrimary(),
+        ) {
+            top.yukonga.miuix.kmp.basic.Text("知道了", style = MiuixTheme.textStyles.button)
+        }
+        Box(Modifier.padding(top = 8.dp)) {
+            top.yukonga.miuix.kmp.basic.TextButton(
+                text = "重新检测",
+                onClick = { refreshTick++ },
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
+            )
+        }
+    }
 }
 
 /**
@@ -120,13 +122,13 @@ private fun LogActions(refreshTick: Int, onChanged: () -> Unit) {
     var confirmClear by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            if (lines > 0) "诊断日志：已记录 $lines 行"
-            else "诊断日志：暂无记录",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        top.yukonga.miuix.kmp.basic.Text(
+            text = if (lines > 0) "诊断日志：已记录 $lines 行" else "诊断日志：暂无记录",
+            style = MiuixTheme.textStyles.footnote2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         )
-        OutlinedButton(
+        top.yukonga.miuix.kmp.basic.TextButton(
+            text = "分享诊断日志",
             onClick = {
                 val text = com.java.myapplication.timer.TimerTrace.exportText(context)
                 val share = Intent(Intent.ACTION_SEND).apply {
@@ -140,90 +142,104 @@ private fun LogActions(refreshTick: Int, onChanged: () -> Unit) {
                     Toast.makeText(context, "暂时无法打开分享菜单", Toast.LENGTH_SHORT).show()
                 }
             },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("分享诊断日志")
-        }
-        TextButton(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 20.dp,
+            minHeight = 42.dp,
+            colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
+        )
+        top.yukonga.miuix.kmp.basic.TextButton(
+            text = "清空诊断日志",
             onClick = { confirmClear = true },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                "清空诊断日志",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 20.dp,
+            minHeight = 42.dp,
+            colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
+        )
     }
 
     if (confirmClear) {
-        HyperOsAlertDialog(
+        top.yukonga.miuix.kmp.overlay.OverlayDialog(
+            show = true,
+            title = "清空诊断日志？",
+            summary = "将删除已记录的全部诊断日志，且无法恢复。\n\n" +
+                "如果日志里已经包含问题复现的记录，建议先「分享」保存一份再清空。",
             onDismissRequest = { confirmClear = false },
-            title = { Text("清空诊断日志？") },
-            text = {
-                Text(
-                    "将删除已记录的全部诊断日志，且无法恢复。\n\n" +
-                        "如果日志里已经包含问题复现的记录，建议先「分享」保存一份再清空。"
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
+        ) {
+            top.yukonga.miuix.kmp.basic.Button(
+                onClick = {
                     confirmClear = false
                     val ok = com.java.myapplication.timer.TimerTrace.clear(context)
                     Toast.makeText(
                         context,
                         if (ok) "诊断日志已清空" else "清空失败，请重试",
-                        Toast.LENGTH_SHORT
+                        Toast.LENGTH_SHORT,
                     ).show()
                     onChanged()
-                }) {
-                    Text("清空", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmClear = false }) { Text("取消") }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors(
+                    color = MiuixTheme.colorScheme.error,
+                    contentColor = MiuixTheme.colorScheme.onError,
+                ),
+            ) {
+                top.yukonga.miuix.kmp.basic.Text("清空", style = MiuixTheme.textStyles.button)
             }
-        )
+            Box(Modifier.padding(top = 8.dp)) {
+                top.yukonga.miuix.kmp.basic.TextButton(
+                    text = "取消",
+                    onClick = { confirmClear = false },
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 20.dp,
+                    minHeight = 44.dp,
+                    colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
+                )
+            }
+        }
     }
 }
 
 @Composable
 internal fun DiagRow(item: DiagItem) {
     val context = LocalContext.current
-    SoftCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // v2.6.20：原用 emoji「✅ / ⚠️」。emoji 走系统彩色字体，字形与基线
-            // 随 ROM 变化，与相邻文字对不齐；这里改用自绘矢量图标（与底部导航同一
-            // 套 EyeIcons），尺寸与垂直居中可控，颜色交给主题。
-            Icon(
-                imageVector = if (item.ok) EyeIcons.CheckCircle else EyeIcons.AlertCircle,
-                contentDescription = if (item.ok) "已就绪" else "需要处理",
-                tint = if (item.ok) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.size(22.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = if (item.ok) MiuixIcons.Ok else MiuixIcons.Info,
+            contentDescription = if (item.ok) "已就绪" else "需要处理",
+            tint = if (item.ok) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.error,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            top.yukonga.miuix.kmp.basic.Text(
+                text = item.title,
+                style = MiuixTheme.textStyles.title4,
+                color = MiuixTheme.colorScheme.onSurface,
             )
-            Spacer(Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    item.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    item.detail,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (item.actionLabel != null && item.target != null) {
-                Spacer(Modifier.width(8.dp))
-                TextButton(onClick = { openSystemPage(context, item.target) }) {
-                    Text(item.actionLabel, style = MaterialTheme.typography.labelMedium)
-                }
-            }
+            Spacer(Modifier.height(2.dp))
+            top.yukonga.miuix.kmp.basic.Text(
+                text = item.detail,
+                style = MiuixTheme.textStyles.footnote2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+        }
+        if (item.actionLabel != null && item.target != null) {
+            Spacer(Modifier.width(6.dp))
+            top.yukonga.miuix.kmp.basic.TextButton(
+                text = item.actionLabel,
+                onClick = { openSystemPage(context, item.target) },
+                cornerRadius = 14.dp,
+                minHeight = 40.dp,
+                colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.textButtonColorsPrimary(),
+            )
         }
     }
 }
