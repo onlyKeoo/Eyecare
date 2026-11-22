@@ -6,8 +6,8 @@
 
 不联网 · 无广告 · 无账号 · 不收集任何数据
 
-[![Version](https://img.shields.io/badge/version-v2.7.1-2E7D32)](DEVELOPERS.md)
-[![Android](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](#)
+[![Version](https://img.shields.io/badge/version-v2.9.0-2E7D32)](DEVELOPERS.md)
+[![Android](https://img.shields.io/badge/Android-13%2B-3DDC84?logo=android&logoColor=white)](#)
 [![许可证](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-GPL--3.0-2E7D32)](#许可证)
 
 </div>
@@ -82,6 +82,32 @@
 ## 关于健康
 
 本应用是一个**习惯提醒工具**，不是医疗设备，也不提供任何诊断或治疗建议。眼睛有不适请就医。
+
+---
+
+## 第三方组件与致谢
+
+本项目站在一些开源工作上，下面按「用的是什么」分开写清楚，避免把「参考了版式」和「用了它的代码」混为一谈。
+
+**运行时依赖**
+
+| 组件 | 许可证 | 用途 |
+|---|---|---|
+| [Miuix](https://github.com/compose-miuix-ui/miuix) 0.9.4 / 0.9.3 | Apache-2.0 | 组件库、主题、图标、圆角与背景模糊、二级页导航 |
+| AndroidX · Kotlin · KotlinX | Apache-2.0 | 基础框架与语言运行时 |
+| MaterialKolor `material-color-utilities` 5.0.1 | MIT | 由 Miuix 传递引入，用于动态取色 |
+| Google Material Icons（`visibility`） | Apache-2.0 | 通知栏小图标 |
+
+**设计参考**
+
+- [HuaweiPods](https://github.com/Nshpiter/HuaweiPods)（GPL-3.0）：悬浮底栏、参数瓦片、按压反馈等界面与动效参考。
+  其中**「按跨页数决定切页时长」的算式改写自它的 `MainTabsPagerState`**，这是本项目唯一一处代码级复用。
+- [HyperIsland](https://github.com/1812z/HyperIsland)（MIT）：关于页「居中头图 → 分组列表」的版式参考，未复制其代码。
+
+应用图标与内置提示音由作者自制（图标为 AI 生成），随本项目以 GPL-3.0 授权。
+
+完整清单（版本、上游提交、修改范围、素材来源）见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，
+许可证全文在 [LICENSES/](LICENSES/)。这些文本也随 APK 一起分发，应用内入口：**设置 → 关于 → 开源许可**。
 
 ---
 
