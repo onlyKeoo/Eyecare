@@ -3,7 +3,6 @@ import java.io.File
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -15,7 +14,11 @@ android {
 
     defaultConfig {
         applicationId = "com.java.myapplication"
-        minSdk = 24
+        // v3.1：抬到 33，为了用官方 miuix-blur 做真实背景模糊。
+        // 该库（0.9.2–0.9.4）的清单里声明 minSdk 33，无法在 24 上安全加载：
+        // 强行 overrideLibrary 会在 RenderEffect 类加载阶段崩溃，属于"装得上但一用就炸"。
+        // 代价是放弃 Android 7–12；这是用户 2026-11-21 明确同意的取舍。
+        minSdk = 33
         targetSdk = 35
         // v2.9.0：跨过一个只在代码注释里存在的小版本序列。
         // v2.7.2–v2.8.9 的改动从未单独出包，它们累积在这次发布里；
@@ -112,7 +115,11 @@ dependencies {
     implementation(libs.miuix.preference)
     implementation(libs.miuix.icons)
     implementation(libs.miuix.squircle)
-    implementation(libs.kotlinx.serialization.core)
+    // 真实背景模糊（minSdk 33，与 miuix 同版本）
+    implementation(libs.miuix.blur)
+    // v3.5：二级页导航与转场交给 miuix 的 nav3 集成（500ms 弹簧缓动、预测返回）
+    implementation(libs.miuix.navigation3.ui)
+    implementation(libs.navigation3.runtime)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

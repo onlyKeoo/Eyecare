@@ -9,16 +9,16 @@ lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.12.0"
 composeBom = "2026.09.00"
 miuix = "0.9.4"
-kotlinxSerialization = "1.9.0"
 
 [libraries]
 miuix-ui = { group = "top.yukonga.miuix.kmp", name = "miuix-ui", version.ref = "miuix" }
 miuix-preference = { group = "top.yukonga.miuix.kmp", name = "miuix-preference", version.ref = "miuix" }
 miuix-icons = { group = "top.yukonga.miuix.kmp", name = "miuix-icons", version.ref = "miuix" }
-miuix-nav = { group = "top.yukonga.miuix.kmp", name = "miuix-nav", version.ref = "miuix" }
+miuix-blur = { group = "top.yukonga.miuix.kmp", name = "miuix-blur-android", version.ref = "miuix" }
+# 导航转场：miuix 的 nav3 集成只有 0.9.3（androidx.navigation3 的 fork）
+miuix-navigation3-ui = { group = "top.yukonga.miuix.kmp", name = "miuix-navigation3-ui-android", version = "0.9.3" }
+navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version = "1.1.4" }
 miuix-squircle = { group = "top.yukonga.miuix.kmp", name = "miuix-squircle", version.ref = "miuix" }
-kotlinx-serialization-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-core", version.ref = "kotlinxSerialization" }
-kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
@@ -38,5 +38,4 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 

@@ -164,6 +164,7 @@ object RestNotifier {
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_eye_care)
+            .setColor(notificationTint(context))
             .setContentTitle("🌿 该让眼睛休息啦")
             .setContentText("点击「开始休息」，远眺 $restSeconds 秒")
             .setStyle(
@@ -253,6 +254,7 @@ object RestNotifier {
         // 而我们要的是「渠道本来就静音」，不是「临时压一下」（后者行为随 ROM 而异）。
         val builder = NotificationCompat.Builder(context, REST_END_SILENT_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_eye_care)
+            .setColor(notificationTint(context))
             .setContentTitle("🌿 休息结束，可以继续了")
             .setContentText("眼睛放松好了，回到屏幕前继续吧")
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -295,6 +297,7 @@ object RestNotifier {
         // 复用同一渠道与通知本体 id（1001）：同一条提醒就地刷新，不会堆一屏通知
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_eye_care)
+            .setColor(notificationTint(context))
             .setContentTitle("🌿 还在用眼，该休息啦")
             .setContentText("已超出 $overdueMinutes 分钟，点击「开始休息」")
             .setStyle(
@@ -352,3 +355,13 @@ object RestNotifier {
         nm.cancel(REST_END_NOTIFICATION_ID)
     }
 }
+
+/**
+ * 通知图标着色（v3.2）。
+ *
+ * 跟随 Compose 侧发布的主题强调色：开启「跟随系统取色」后，通知栏小图标
+ * 与 App 内是同一色；没发布过时用护眼绿兜底，不会变成系统默认灰。
+ */
+private fun notificationTint(context: android.content.Context): Int =
+    com.java.myapplication.data.ThemeBridge.read(context)?.primary
+        ?: com.java.myapplication.data.ThemePalette.FallbackLight.primary

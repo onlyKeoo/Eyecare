@@ -1,6 +1,5 @@
 package com.java.myapplication.notify
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -30,7 +29,6 @@ import androidx.core.app.NotificationCompat
 import com.java.myapplication.R
 import com.java.myapplication.data.EyeTips
 import com.java.myapplication.data.SettingsStore
-import com.java.myapplication.notify.RestNotifier.ACTION_REST_NOW
 
 /**
  * 到点后强制全屏的「后台覆盖」服务（v2.4.2 新增）。
@@ -125,11 +123,11 @@ class RestOverlayService : Service() {
         stopSelf()
     }
 
-    /** 是否按深色渲染覆盖层：系统深色 **且** 用户开着「自动夜间模式」（与 App 内一致） */
+    /** 是否按深色渲染覆盖层：与 App 内使用同一个 ThemeMode 判定，不再各算一套 */
     private fun isDarkUi(): Boolean {
         val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
             Configuration.UI_MODE_NIGHT_YES
-        return night && SettingsStore.load(this).autoNightMode
+        return SettingsStore.load(this).themeMode.isDark(night)
     }
 
     private val tick = object : Runnable {
@@ -206,20 +204,27 @@ class RestOverlayService : Service() {
 
         // 配色跟随深色模式：这块全屏遮罩以前硬编码浅色，深色模式下会「啪」地糊一脸白光，
         // 与护眼初衷正好相反。现在与 Compose 休息页（ui/RestScreen.kt）用同一套成对色值。
+        // 配色以 Compose 侧发布的调色板为准（v3.2）。
+        //
+        // 这样「跟随系统取色」开启时，后台悬浮窗和 App 内休息页是同一套色；
+        // 没发布过（服务抢在首帧前启动）才回落到固定的浅/深两套。
         val dark = isDarkUi()
-        val titleColor = if (dark) 0xFFD9E3DC.toInt() else 0xFF2C3E33.toInt()
-        val subtitleColor = if (dark) 0xFF9FADA4.toInt() else 0xFF4F5F56.toInt()
-        val bodyColor = if (dark) 0xFF9FADA4.toInt() else 0xFF6B7A70.toInt()
-        val accentColor = if (dark) 0xFF7CC9A0.toInt() else 0xFF2F7A54.toInt()
-        // 这两个字面量 <= 0x7FFFFFFF，作为 Int 已经是正数，再加 .toInt() 是多余的
-        val trackColor = if (dark) 0x33D9E3DC else 0x1A4CAF7D
+        val palette = com.java.myapplication.data.ThemeBridge.read(this)
+            ?: if (dark) com.java.myapplication.data.ThemePalette.FallbackDark
+            else com.java.myapplication.data.ThemePalette.FallbackLight
+        val titleColor = palette.onBackground
+        val subtitleColor = palette.onSurfaceVariant
+        val bodyColor = palette.onSurfaceVariant
+        val accentColor = palette.primary
+        val trackColor = withAlpha(palette.onBackground, if (dark) 0x33 else 0x1A)
 
-        // 背景：纵向渐变（深浅两套实心色，不依赖 alpha 叠加，保证对比度）
-        val bgColors = if (dark) {
-            intArrayOf(0xFF20302A.toInt(), 0xFF1F2A31.toInt(), 0xFF1A2420.toInt())
-        } else {
-            intArrayOf(0xFFEAF3EC.toInt(), 0xFFE4EEF5.toInt(), 0xFFFAF8F5.toInt())
-        }
+        // 背景：纵向渐变。由调色板的 background / surfaceContainer 生成，
+        // 不再写死绿色渐变 —— 否则系统取色开启后，这里会是整屏唯一的绿色。
+        val bgColors = intArrayOf(
+            palette.background,
+            mixColor(palette.background, palette.surfaceContainer, 0.55f),
+            palette.surface,
+        )
         val bg = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, bgColors)
         root.background = bg
 
@@ -252,7 +257,7 @@ class RestOverlayService : Service() {
             progress = 0f
             strokeDp = 18f
             this.trackColor = trackColor
-            arcShades = if (dark) ProgressRingView.DARK_SHADES else ProgressRingView.LIGHT_SHADES
+            this.darkUi = dark
         }
         ringView = ring
         ringBox.addView(
@@ -447,11 +452,28 @@ class ProgressRingView(context: Context) : View(context) {
     var trackColor: Int = 0x1A4CAF7D
 
     /**
-     * 进度弧的扫掠渐变色标（3 点 → 6 点 → 9 点 → 12 点 → 3 点）。
-     * 与 App 内 EyeProgressRing 的 Brush.sweepGradient 用同一组停点，
-     * 这样后台悬浮窗和 App 内休息页看起来才是同一个环。
+     * 进度弧的扫掠渐变色标。
+     *
+     * v3.2 起由调色板生成：主色 → 警示色 → 主色。品牌绿模式下就是原来的
+     * 绿→橙→红，Monet 模式下自动变成系统强调色→错误色，不再需要两套常量。
      */
-    var arcShades: IntArray = LIGHT_SHADES
+    /** 服务侧算好的深浅，避免 View 自己去读 Configuration（两处判断会漂移） */
+    var darkUi: Boolean = false
+
+    private fun arcShadesFromPalette(): IntArray {
+        val palette = com.java.myapplication.data.ThemeBridge.read(context)
+            ?: if (darkUi) com.java.myapplication.data.ThemePalette.FallbackDark
+            else com.java.myapplication.data.ThemePalette.FallbackLight
+        val a = palette.primary
+        val b = palette.error
+        return intArrayOf(
+            mixColor(a, b, 0.25f),
+            b,
+            mixColor(a, b, 0.50f),
+            a,
+            mixColor(a, b, 0.25f),
+        )
+    }
 
     private val density = resources.displayMetrics.density
 
@@ -476,33 +498,28 @@ class ProgressRingView(context: Context) : View(context) {
         val p = progress.coerceIn(0f, 1f)
         if (p > 0f) {
             paint.shader = android.graphics.SweepGradient(
-                rect.centerX(), rect.centerY(), arcShades, null
+                rect.centerX(),
+                rect.centerY(),
+                arcShadesFromPalette(),
+                null,
             )
             canvas.drawArc(rect, -90f, 360f * p, false, paint)
             paint.shader = null
         }
     }
-
-    companion object {
-        /**
-         * 浅色：与 Compose 端 EyeProgressRing 的 Brush.sweepGradient 停点逐值对齐
-         * （0.00/0.25 停点分别取 lerp(GrassGreen,SunOrange,0.25) 与 lerp(SunOrange,CoralRed,0.5)）。
-         */
-        val LIGHT_SHADES = intArrayOf(
-            0xFF76AC66.toInt(),  // 3 点：绿→橙 25%
-            0xFFF5A623.toInt(),  // 6 点：SunOrange
-            0xFFED8C4B.toInt(),  // 9 点：橙→红 50%
-            0xFF4CAF7D.toInt(),  // 12 点：GrassGreen（弧起点）
-            0xFF76AC66.toInt()   // 回到 3 点闭合
-        )
-
-        /** 深色：同结构换成 NightGreen/NightOrange/NightRed，避免夜间遮罩上一圈荧光 */
-        val DARK_SHADES = intArrayOf(
-            0xFF7C9C6E.toInt(),
-            0xFFD8994A.toInt(),
-            0xFFCE8A62.toInt(),
-            0xFF5E9E7B.toInt(),
-            0xFF7C9C6E.toInt()
-        )
-    }
 }
+
+/** 两色线性混合；t 会被夹到 0..1。ARGB 各自插值，避免只混 RGB 把 alpha 弄丢。 */
+private fun mixColor(from: Int, to: Int, t: Float): Int {
+    val f = t.coerceIn(0f, 1f)
+    val a = ((from ushr 24) and 0xFF) + (((to ushr 24) and 0xFF) - ((from ushr 24) and 0xFF)) * f
+    val r = ((from shr 16) and 0xFF) + (((to shr 16) and 0xFF) - ((from shr 16) and 0xFF)) * f
+    val g = ((from shr 8) and 0xFF) + (((to shr 8) and 0xFF) - ((from shr 8) and 0xFF)) * f
+    val b = (from and 0xFF) + ((to and 0xFF) - (from and 0xFF)) * f
+    return ((a.toInt() and 0xFF) shl 24) or ((r.toInt() and 0xFF) shl 16) or
+        ((g.toInt() and 0xFF) shl 8) or (b.toInt() and 0xFF)
+}
+
+/** 只替换 alpha，保留 RGB。 */
+private fun withAlpha(color: Int, alpha: Int): Int =
+    (color and 0x00FFFFFF) or ((alpha and 0xFF) shl 24)

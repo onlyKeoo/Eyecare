@@ -53,6 +53,7 @@
         tools:ignore="ProtectedPermissions" />
 
     <application
+        android:enableOnBackInvokedCallback="true"
         android:name=".EyeCareApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
