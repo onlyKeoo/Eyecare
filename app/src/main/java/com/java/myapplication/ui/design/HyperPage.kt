@@ -114,7 +114,9 @@ fun SubPage(
                 .padding(horizontal = HyperSpace.Page),
         ) {
             content()
-            Spacer(Modifier.height(HyperSpace.Bottom))
+            // 二级页同样被浮动底栏覆盖，留白必须与一级页一致（112dp），
+            // 否则最后一行会被底栏压住（参考与致谢的页脚实测被压掉一半）。
+            Spacer(Modifier.height(HyperSpace.BottomWithNav))
         }
     }
 }

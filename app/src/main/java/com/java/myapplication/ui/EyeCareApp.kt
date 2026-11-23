@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.unit.dp
@@ -184,15 +186,17 @@ fun EyeCareApp(viewModel: EyeCareViewModel = viewModel()) {
                             if (shellSettings.blurBottomBar) {
                                 Modifier.hyperNavGlass(backdrop = navBackdrop)
                             } else {
-                                Modifier.background(MiuixTheme.colorScheme.surfaceContainer)
+                                // 关掉模糊时自己画底色，必须显式裁剪成胶囊：
+                                // background 不认 cornerRadius，不裁就是一块直角矩形（实测过）。
+                                Modifier
+                                    .clip(RoundedCornerShape(26.dp))
+                                    .background(MiuixTheme.colorScheme.surfaceContainer)
                             },
                         )
                         .zIndex(2f),
-                    color = if (shellSettings.blurBottomBar) {
-                        Color.Transparent
-                    } else {
-                        MiuixTheme.colorScheme.surfaceContainer
-                    },
+                    // 底色一律由上面的 modifier 画（玻璃或纯色），
+                    // 组件自身不再填色，避免两层叠加后颜色偏深。
+                    color = Color.Transparent,
                     cornerRadius = 26.dp,
                     showDivider = false,
                     defaultWindowInsetsPadding = true,

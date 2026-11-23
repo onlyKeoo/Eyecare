@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -248,6 +249,9 @@ private fun LicenseTextDialog(doc: LicenseDoc, onDismiss: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // 弹窗内容高度不受限，正文会把「关闭」按钮顶出屏幕。
+                // 给滚动区一个上限，按钮就始终在可视范围内。
+                .heightIn(max = 420.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
             Text(

@@ -227,7 +227,12 @@ private fun TimerHeroCard(viewModel: EyeCareViewModel) {
                 disabled -> "打开下方「护眼提醒」后开始累计"
                 awaiting -> "点下方「现在休息」开始 ${viewModel.settings.restSeconds} 秒远眺"
                 paused -> "息屏时不计入用眼时长，亮屏后继续"
-                else -> "后提醒你休息 ${viewModel.settings.restSeconds} 秒"
+                // 分钟向上取整：还剩 19:59 时说「20 分钟后」，而不是「19 分钟后」。
+                // 之前这里少了前缀，界面上直接显示「后提醒你休息 40 秒」。
+                else -> {
+                    val minutes = (viewModel.remainingSeconds + 59) / 60
+                    "$minutes 分钟后提醒你休息 ${viewModel.settings.restSeconds} 秒"
+                }
             },
             style = MiuixTheme.textStyles.footnote1,
             color = subtle,
