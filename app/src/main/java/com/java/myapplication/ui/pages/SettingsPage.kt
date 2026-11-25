@@ -34,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.mutableIntStateOf
 import com.java.myapplication.data.AppInfo
 import com.java.myapplication.data.AppSettings
@@ -53,7 +52,6 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.NumberPicker
-import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.SnackbarDuration
 import top.yukonga.miuix.kmp.basic.Text
@@ -177,10 +175,12 @@ internal fun SettingsRouteContent(
         SettingsRoute.Timing -> SubPage("计时参数", onBack = onBack) {
             Spacer(Modifier.height(HyperSpace.Tight))
             HyperSection(title = "节奏") {
-                IntWheelRow(
+                // 1–120 分钟：用「时 + 分」两个滚轮，比滚 120 格快得多
+                DualWheelRow(
                     title = "用眼提醒间隔",
-                    value = s.workMinutes,
-                    range = 1..120,
+                    valueMinutes = s.workMinutes,
+                    hourRange = 0..2,
+                    minMinuteAtZeroHour = 1,
                     unit = "分钟",
                     onChange = { v -> update({ it.copy(workMinutes = v) }, "用眼提醒间隔：$v 分钟", settled = true) },
                 )
@@ -195,10 +195,12 @@ internal fun SettingsRouteContent(
             }
             Spacer(Modifier.height(HyperSpace.Section))
             HyperSection(title = "目标") {
-                IntWheelRow(
+                // 10–480 分钟：滚 480 格不现实，改成时 + 分
+                DualWheelRow(
                     title = "每日用眼目标",
-                    value = s.dailyGoalMinutes,
-                    range = 10..480,
+                    valueMinutes = s.dailyGoalMinutes,
+                    hourRange = 0..8,
+                    minMinuteAtZeroHour = 10,
                     unit = "分钟",
                     onChange = { v -> update({ it.copy(dailyGoalMinutes = v) }, "每日用眼目标：$v 分钟", settled = true) },
                 )
@@ -329,25 +331,22 @@ internal fun SettingsRouteContent(
                 ) {
                     Column {
                         HyperDivider(startInset = 16.dp)
-                        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                             Text(
                                 text = "提醒间隔",
                                 style = MiuixTheme.textStyles.title4,
                                 color = MiuixTheme.colorScheme.onSurface,
                             )
-                            Spacer(Modifier.height(8.dp))
-                            TabRow(
-                                tabs = AppSettings.SIT_INTERVAL_CHOICES.map { "$it 分钟" },
-                                selectedTabIndex = AppSettings.SIT_INTERVAL_CHOICES
-                                    .indexOf(s.sitIntervalMinutes).coerceAtLeast(0),
-                                onTabSelected = { idx ->
-                                    val minutes = AppSettings.SIT_INTERVAL_CHOICES[idx]
+                            // 三档按钮换成滚轮（v3.9），与其余时间设置同一套交互。
+                            // 仍限定在 30/45/60 三档内，滚动只在这三个值之间移动。
+                            SitIntervalWheel(
+                                current = s.sitIntervalMinutes,
+                                onPick = { minutes ->
                                     update(
                                         { it.copy(sitIntervalMinutes = minutes) },
                                         "久坐提醒间隔：$minutes 分钟",
                                     )
                                 },
-                                modifier = Modifier.fillMaxWidth(),
                             )
                         }
                     }
@@ -546,24 +545,17 @@ private fun IntWheelSheet(
         title = title,
         onDismissRequest = onDismiss,
     ) {
-        Row(
+        // 单位写进 label，和数字一起居中滚动。
+        //
+        // 之前是「NumberPicker + Row 里的 Text」：NumberPicker 内部写死
+        // fillMaxWidth()，会把整个宽度吃掉，单位被推到最右边、还被压成竖排。
+        NumberPicker(
+            value = draft,
+            onValueChange = { draft = it },
+            range = range,
+            label = { "$it $unit" },
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            NumberPicker(
-                value = draft,
-                onValueChange = { draft = it },
-                range = range,
-                label = { it.toString() },
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = unit,
-                style = MiuixTheme.textStyles.title4,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-        }
+        )
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TextButton(
@@ -582,6 +574,142 @@ private fun IntWheelSheet(
                 colors = ButtonDefaults.buttonColorsPrimary(),
             ) { Text("确定", style = MiuixTheme.textStyles.button) }
         }
+    }
+}
+
+/**
+ * 双栏滚轮（小时 + 分钟），用于跨度大的设置。
+ *
+ * 两个 NumberPicker 各占一半宽度（都内部 fillMaxWidth，用 weight 分配），
+ * 中间用冒号分隔；单位不写在数字后面，避免「120 分钟」这种长串把栏撑开。
+ *
+ * [hourRange] 决定小时可选范围；当小时为 0 时分钟从 [minMinuteAtZeroHour] 起，
+ * 防止选出「0 小时 0 分钟」这种无效组合（确定按钮会变成死键）。
+ */
+@Composable
+private fun DualWheelSheet(
+    title: String,
+    initialMinutes: Int,
+    hourRange: IntRange,
+    minMinuteAtZeroHour: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    var hour by remember {
+        mutableIntStateOf((initialMinutes / 60).coerceIn(hourRange.first, hourRange.last))
+    }
+    var minute by remember {
+        mutableIntStateOf((initialMinutes % 60).coerceIn(minMinuteAtZeroHour, 59))
+    }
+    // 小时切到 0 时，把分钟抬到允许的最小值，避免停在无效区间
+    val minuteRange = if (hour == 0 && hourRange.first == 0) minMinuteAtZeroHour..59 else 0..59
+    if (minute !in minuteRange) minute = minuteRange.first
+
+    OverlayBottomSheet(
+        show = true,
+        title = title,
+        onDismissRequest = onDismiss,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NumberPicker(
+                value = hour,
+                onValueChange = { hour = it },
+                range = hourRange,
+                label = { "$it 时" },
+                modifier = Modifier.weight(1f),
+            )
+            NumberPicker(
+                value = minute,
+                onValueChange = { minute = it },
+                range = minuteRange,
+                label = { "$it 分" },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TextButton(
+                text = "取消",
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.textButtonColors(),
+            )
+            Button(
+                onClick = { onConfirm(hour * 60 + minute) },
+                modifier = Modifier.weight(1f),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.buttonColorsPrimary(),
+            ) { Text("确定", style = MiuixTheme.textStyles.button) }
+        }
+    }
+}
+
+/**
+ * 久坐提醒间隔：滚轮，但只在 30/45/60 三档之间滚动。
+ *
+ * 为什么不用 IntWheelRow：那会允许 31、47 这类值，
+ * 而这一项的产品定义就是三档（[AppSettings.SIT_INTERVAL_CHOICES]）。
+ */
+@Composable
+private fun SitIntervalWheel(current: Int, onPick: (Int) -> Unit) {
+    val choices = AppSettings.SIT_INTERVAL_CHOICES
+    val index = choices.indexOf(current).coerceAtLeast(0)
+    NumberPicker(
+        value = index,
+        onValueChange = { i -> choices.getOrNull(i)?.let(onPick) },
+        range = choices.indices,
+        label = { i -> "${choices.getOrElse(i) { choices.first() }} 分钟" },
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** 大跨度设置用的行：点开双栏滚轮，摘要显示「X 小时 Y 分钟」。 */
+@Composable
+private fun DualWheelRow(
+    title: String,
+    valueMinutes: Int,
+    hourRange: IntRange,
+    minMinuteAtZeroHour: Int,
+    unit: String,
+    onChange: (Int) -> Unit,
+    subtitle: String? = null,
+) {
+    var open by remember { mutableStateOf(false) }
+    MiuixArrowPreference(
+        title = title,
+        summary = subtitle ?: formatHm(valueMinutes, unit),
+        onClick = { open = true },
+    )
+    if (open) {
+        DualWheelSheet(
+            title = title,
+            initialMinutes = valueMinutes,
+            hourRange = hourRange,
+            minMinuteAtZeroHour = minMinuteAtZeroHour,
+            onDismiss = { open = false },
+            onConfirm = {
+                open = false
+                if (it != valueMinutes) onChange(it)
+            },
+        )
+    }
+}
+
+/** 摘要文案：整小时省掉「0 分」，不足 1 小时只写分钟。 */
+private fun formatHm(totalMinutes: Int, unit: String): String {
+    if (unit != "分钟") return "$totalMinutes $unit"
+    val h = totalMinutes / 60
+    val m = totalMinutes % 60
+    return when {
+        h == 0 -> "$m 分钟"
+        m == 0 -> "$h 小时"
+        else -> "$h 小时 $m 分钟"
     }
 }
 
