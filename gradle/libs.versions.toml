@@ -1,15 +1,24 @@
 [versions]
-agp = "9.0.0"
-kotlin = "2.3.10"
-coreKtx = "1.10.1"
+agp = "9.4.1"
+kotlin = "2.4.20"
+coreKtx = "1.17.0"
 junit = "4.13.2"
-junitVersion = "1.1.5"
-espressoCore = "3.5.1"
-lifecycleRuntimeKtx = "2.6.1"
-activityCompose = "1.8.0"
-composeBom = "2026.01.01"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
+lifecycleRuntimeKtx = "2.11.0"
+activityCompose = "1.12.0"
+composeBom = "2026.09.00"
+miuix = "0.9.4"
 
 [libraries]
+miuix-ui = { group = "top.yukonga.miuix.kmp", name = "miuix-ui", version.ref = "miuix" }
+miuix-preference = { group = "top.yukonga.miuix.kmp", name = "miuix-preference", version.ref = "miuix" }
+miuix-icons = { group = "top.yukonga.miuix.kmp", name = "miuix-icons", version.ref = "miuix" }
+miuix-blur = { group = "top.yukonga.miuix.kmp", name = "miuix-blur-android", version.ref = "miuix" }
+# 导航转场：miuix 的 nav3 集成只有 0.9.3（androidx.navigation3 的 fork）
+miuix-navigation3-ui = { group = "top.yukonga.miuix.kmp", name = "miuix-navigation3-ui-android", version = "0.9.3" }
+navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version = "1.1.4" }
+miuix-squircle = { group = "top.yukonga.miuix.kmp", name = "miuix-squircle", version.ref = "miuix" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }

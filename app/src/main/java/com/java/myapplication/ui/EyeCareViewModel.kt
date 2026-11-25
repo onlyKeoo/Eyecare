@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.java.myapplication.data.AppSettings
+import com.java.myapplication.data.ThemeMode
 import com.java.myapplication.data.EyeTips
 import com.java.myapplication.data.ForegroundApp
 import com.java.myapplication.data.SettingsStore
@@ -119,9 +120,9 @@ class EyeCareViewModel : ViewModel() {
     // 最近一次同步到的屏幕状态（供 pausedByScreenOff 使用）
     private var screenOnNow: Boolean = true
 
-    /** 自动夜间模式开关（供 MainActivity 的 Compose 主题实时读取） */
-    val autoNightModeState: State<Boolean> =
-        derivedStateOf { settings.autoNightMode }
+    /** 主题模式（供 MainActivity 的 Compose 主题实时读取） */
+    val themeModeState: State<ThemeMode> =
+        derivedStateOf { settings.themeMode }
 
     /** 免打扰时段内应当静音（供 RestNotifier 判断） */
     val inDndWindow: Boolean

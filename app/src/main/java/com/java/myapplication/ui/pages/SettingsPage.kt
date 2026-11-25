@@ -1,0 +1,989 @@
+package com.java.myapplication.ui.pages
+
+import android.content.Context
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberDecoratedNavEntries
+import androidx.navigation3.ui.NavDisplay
+import androidx.navigation3.ui.NavDisplayTransitionEffects
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.runtime.mutableIntStateOf
+import com.java.myapplication.data.AppInfo
+import com.java.myapplication.data.AppSettings
+import com.java.myapplication.data.ThemeMode
+import com.java.myapplication.notify.RestSoundPlayer
+import com.java.myapplication.notify.RestSoundSource
+import com.java.myapplication.ui.DiagnosticsPanel
+import com.java.myapplication.ui.EyeCareViewModel
+import com.java.myapplication.ui.design.HyperDivider
+import com.java.myapplication.ui.design.HyperSection
+import com.java.myapplication.ui.design.HyperSpace
+import com.java.myapplication.ui.design.RootPage
+import com.java.myapplication.ui.design.SubPage
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.NumberPicker
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
+import top.yukonga.miuix.kmp.basic.SnackbarDuration
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
+import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import top.yukonga.miuix.kmp.preference.ArrowPreference as MiuixArrowPreference
+import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import top.yukonga.miuix.kmp.preference.RadioButtonPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+/**
+ * 设置页（v3.0 重做）。
+ *
+ * ## 结构
+ *
+ * 一级：四组入口（护眼 / 提醒 / 通用 / 其他），只负责"去哪"，
+ * 不放任何开关 —— 开关放在一级页会让整页都是控件，反而找不到入口。
+ *
+ * 二级：每一类参数一页，页面内仍然分组（同组参数放一张卡）。
+ * 返回由 [BackHandler] 接管：在二级页按返回回到一级，在一级页交还系统。
+ *
+ * ## 为什么用 miuix 的 Preference 组件
+ *
+ * [MiuixArrowPreference]、[RadioButtonPreference]、[Switch] 这些的手感
+ * （按下缩放、行高、内距、与描边的对齐）都是 HyperOS 的规范值，
+ * 自己用 Box + clickable 拼出来的行，按下去只有 ripple，观感立刻掉档。
+ */
+@Composable
+internal fun SettingsRouteContent(
+    route: SettingsRoute,
+    viewModel: EyeCareViewModel,
+    context: Context,
+    snackbarHostState: SnackbarHostState,
+    onOpen: (SettingsRoute) -> Unit,
+    onBack: () -> Unit,
+) {
+    var showDiagnostics by remember { mutableStateOf(false) }
+    var showFullScreenConfirm by remember { mutableStateOf(false) }
+    var pendingAnnounce by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+
+    LaunchedEffect(pendingAnnounce) {
+        val msg = pendingAnnounce ?: return@LaunchedEffect
+        delay(600L)
+        snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
+        pendingAnnounce = null
+    }
+
+    // 统一提交：永远基于**当前最新**设置做变换，避免闭包捕获旧值互相覆盖
+    fun update(
+        transform: (AppSettings) -> AppSettings,
+        announce: String = "设置已保存",
+        settled: Boolean = false,
+    ) {
+        viewModel.updateSettings(context, transform(viewModel.settings))
+        if (settled) {
+            pendingAnnounce = announce
+        } else {
+            pendingAnnounce = null
+            scope.launch {
+                        snackbarHostState.showSnackbar(announce, duration = SnackbarDuration.Short)
+            }
+        }
+    }
+
+    if (showDiagnostics) {
+        DiagnosticsPanel(onDismiss = { showDiagnostics = false })
+        return
+    }
+
+    val s = viewModel.settings
+    // 版本号走 PackageManager（IPC），只在首次组合查一次；
+    // 直接写在文案里会让每次重组都做一次跨进程查询。
+    val versionName = remember(context) { AppInfo.versionName(context) }
+
+    when (route) {
+        SettingsRoute.Home -> RootPage(title = "设置") {
+            Spacer(Modifier.height(HyperSpace.Tight))
+            HyperSection {
+                SettingsEntry("计时参数", "提醒间隔、休息时长、每日目标") {
+                    onOpen(SettingsRoute.Timing)
+                }
+                HyperDivider()
+                SettingsEntry("护眼模式", "全屏提醒、超时提醒、免打扰、提示音、返回原应用") {
+                    onOpen(SettingsRoute.Reminder)
+                }
+                HyperDivider()
+                SettingsEntry("久坐提醒", "按间隔提醒起身活动") {
+                    onOpen(SettingsRoute.Sit)
+                }
+            }
+            Spacer(Modifier.height(HyperSpace.Section))
+            HyperSection {
+                SettingsEntry(
+                    "外观",
+                    s.themeMode.label,
+                ) {
+                    onOpen(SettingsRoute.Appearance)
+                }
+            }
+            Spacer(Modifier.height(HyperSpace.Section))
+            HyperSection {
+                SettingsEntry("提醒可靠性自检", "提醒不准时，逐项检查系统权限与电池设置") {
+                    showDiagnostics = true
+                }
+                HyperDivider()
+                // 原来摘要写仓库地址、右侧再挂一个版本号，两个信息挤在
+                // 同一行右侧，v2.9.0 几乎贴住箭头。版本号并进摘要即可。
+                SettingsEntry(
+                    "关于",
+                    "v$versionName · 开源许可与仓库",
+                ) {
+                    onOpen(SettingsRoute.About)
+                }
+            }
+        }
+
+        SettingsRoute.Timing -> SubPage("计时参数", onBack = onBack) {
+            Spacer(Modifier.height(HyperSpace.Tight))
+            HyperSection(title = "节奏") {
+                // 1–120 分钟：用「时 + 分」两个滚轮，比滚 120 格快得多
+                DualWheelRow(
+                    title = "用眼提醒间隔",
+                    valueMinutes = s.workMinutes,
+                    hourRange = 0..2,
+                    minMinuteAtZeroHour = 1,
+                    unit = "分钟",
+                    onChange = { v -> update({ it.copy(workMinutes = v) }, "用眼提醒间隔：$v 分钟", settled = true) },
+                )
+                HyperDivider(startInset = 16.dp)
+                IntWheelRow(
+                    title = "休息时长",
+                    value = s.restSeconds,
+                    range = 5..300,
+                    unit = "秒",
+                    onChange = { v -> update({ it.copy(restSeconds = v) }, "休息时长：$v 秒", settled = true) },
+                )
+            }
+            Spacer(Modifier.height(HyperSpace.Section))
+            HyperSection(title = "目标") {
+                // 10–480 分钟：滚 480 格不现实，改成时 + 分
+                DualWheelRow(
+                    title = "每日用眼目标",
+                    valueMinutes = s.dailyGoalMinutes,
+                    hourRange = 0..8,
+                    minMinuteAtZeroHour = 10,
+                    unit = "分钟",
+                    onChange = { v -> update({ it.copy(dailyGoalMinutes = v) }, "每日用眼目标：$v 分钟", settled = true) },
+                )
+            }
+        }
+
+        SettingsRoute.Reminder -> SubPage("护眼模式", onBack = onBack) {
+            Spacer(Modifier.height(HyperSpace.Tight))
+            HyperSection(title = "到点提醒") {
+                SwitchRow(
+                    title = "到点自动全屏",
+                    subtitle = "关闭后只发通知横幅，不弹全屏",
+                    checked = s.autoFullScreen,
+                    onChecked = { v ->
+                        if (v) showFullScreenConfirm = true
+                        else update({ it.copy(autoFullScreen = false) }, "已关闭「到点自动全屏」")
+                    },
+                )
+                HyperDivider(startInset = 16.dp)
+                IntWheelRow(
+                    title = "超时二次提醒",
+                    subtitle = "到点后仍不休息，每隔这么久再提醒一次",
+                    value = s.overdueRemindMinutes,
+                    range = AppSettings.OVERDUE_REMIND_RANGE,
+                    unit = "分钟",
+                    onChange = { v ->
+                        update({ it.copy(overdueRemindMinutes = v) }, "超时二次提醒：$v 分钟", settled = true)
+                    },
+                )
+            }
+            Spacer(Modifier.height(HyperSpace.Section))
+            HyperSection(title = "免打扰") {
+                SwitchRow(
+                    title = "启用免打扰时段",
+                    subtitle = "时段内只计时不打扰，出时段自动恢复",
+                    checked = s.dndEnabled,
+                    onChecked = { v ->
+                        update({ it.copy(dndEnabled = v) }, if (v) "免打扰时段已开启" else "免打扰时段已关闭")
+                    },
+                )
+                AnimatedVisibility(
+                    visible = s.dndEnabled,
+                    enter = fadeIn(tween(180)) + expandVertically(tween(180)),
+                    exit = fadeOut(tween(120)) + shrinkVertically(tween(120)),
+                ) {
+                    Column {
+                        HyperDivider(startInset = 16.dp)
+                        TimeRow(
+                            title = "开始",
+                            minuteOfDay = s.dndStartMinute,
+                            onPick = { v ->
+                                update({ it.copy(dndStartMinute = v) }, "免打扰开始：${AppSettings.formatMinuteOfDay(v)}")
+                            },
+                        )
+                        HyperDivider(startInset = 16.dp)
+                        TimeRow(
+                            title = "结束",
+                            minuteOfDay = s.dndEndMinute,
+                            onPick = { v ->
+                                update({ it.copy(dndEndMinute = v) }, "免打扰结束：${AppSettings.formatMinuteOfDay(v)}")
+                            },
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(HyperSpace.Section))
+            HyperSection(title = "休息结束") {
+                SwitchRow(
+                    title = "提示音",
+                    checked = s.restEndSoundEnabled,
+                    onChecked = { v ->
+                        update({ it.copy(restEndSoundEnabled = v) }, if (v) "提示音已开启" else "提示音已关闭")
+                    },
+                )
+                AnimatedVisibility(
+                    visible = s.restEndSoundEnabled,
+                    enter = fadeIn(tween(180)) + expandVertically(tween(180)),
+                    exit = fadeOut(tween(120)) + shrinkVertically(tween(120)),
+                ) {
+                    Column {
+                        HyperDivider(startInset = 16.dp)
+                        SwitchRow(
+                            title = "同时振动",
+                            checked = s.restEndSoundVibrate,
+                            onChecked = { v ->
+                                update({ it.copy(restEndSoundVibrate = v) }, if (v) "已开启同时振动" else "已关闭同时振动")
+                            },
+                        )
+                        HyperDivider(startInset = 16.dp)
+                        SoundSourceRow(
+                            current = s.restEndSoundSource,
+                            onSelect = { v ->
+                                update({ it.copy(restEndSoundSource = v) }, "提示音音源：${v.label}")
+                            },
+                        )
+                    }
+                }
+                HyperDivider(startInset = 16.dp)
+                SwitchRow(
+                    title = "休息后回到原应用",
+                    subtitle = "需「使用情况访问」权限",
+                    checked = s.returnToAppAfterRest,
+                    onChecked = { v ->
+                        update(
+                            { it.copy(returnToAppAfterRest = v) },
+                            if (v) "已开启休息后回到原应用" else "已关闭休息后回到原应用",
+                        )
+                    },
+                )
+            }
+        }
+
+        SettingsRoute.Sit -> SubPage("久坐提醒", onBack = onBack) {
+            Spacer(Modifier.height(HyperSpace.Tight))
+            HyperSection {
+                SwitchRow(
+                    title = "久坐提醒",
+                    subtitle = "与用眼提醒独立计时",
+                    checked = s.sitReminderEnabled,
+                    onChecked = { v ->
+                        update({ it.copy(sitReminderEnabled = v) }, if (v) "久坐提醒已开启" else "久坐提醒已关闭")
+                    },
+                )
+                AnimatedVisibility(
+                    visible = s.sitReminderEnabled,
+                    enter = fadeIn(tween(180)) + expandVertically(tween(180)),
+                    exit = fadeOut(tween(120)) + shrinkVertically(tween(120)),
+                ) {
+                    Column {
+                        HyperDivider(startInset = 16.dp)
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                            Text(
+                                text = "提醒间隔",
+                                style = MiuixTheme.textStyles.title4,
+                                color = MiuixTheme.colorScheme.onSurface,
+                            )
+                            // 三档按钮换成滚轮（v3.9），与其余时间设置同一套交互。
+                            // 仍限定在 30/45/60 三档内，滚动只在这三个值之间移动。
+                            SitIntervalWheel(
+                                current = s.sitIntervalMinutes,
+                                onPick = { minutes ->
+                                    update(
+                                        { it.copy(sitIntervalMinutes = minutes) },
+                                        "久坐提醒间隔：$minutes 分钟",
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        SettingsRoute.Appearance -> SubPage("外观", onBack = onBack) {
+            Spacer(Modifier.height(HyperSpace.Tight))
+            HyperSection {
+                OverlayDropdownPreference(
+                    title = "主题",
+                    items = ThemeMode.entries.map { it.label },
+                    selectedIndex = s.themeMode.ordinal,
+                    onSelectedIndexChange = { idx ->
+                        val mode = ThemeMode.entries[idx]
+                        update({ it.copy(themeMode = mode) }, "主题：${mode.label}")
+                    },
+                )
+                HyperDivider(startInset = 16.dp)
+                SwitchRow(
+                    title = "悬浮底栏",
+                    subtitle = "让底部导航栏浮在内容上方",
+                    checked = s.floatingBottomBar,
+                    onChecked = { v ->
+                        update(
+                            { it.copy(floatingBottomBar = v) },
+                            if (v) "底栏已改为悬浮" else "底栏已改为贴底",
+                        )
+                    },
+                )
+                HyperDivider(startInset = 16.dp)
+                SwitchRow(
+                    title = "底栏模糊",
+                    subtitle = "关闭后底栏改用不透明底色",
+                    checked = s.blurBottomBar,
+                    onChecked = { v ->
+                        update(
+                            { it.copy(blurBottomBar = v) },
+                            if (v) "底栏模糊已开启" else "底栏模糊已关闭",
+                        )
+                    },
+                )
+            }
+        }
+
+        SettingsRoute.About -> SubPage("关于", onBack = onBack) {
+            AboutPage(context = context, onOpenLicense = { onOpen(SettingsRoute.References) })
+        }
+
+        SettingsRoute.References -> ReferencesPage(onBack = onBack)
+    }
+
+    if (showFullScreenConfirm) {
+        OverlayDialog(
+            show = true,
+            title = "开启「到点自动全屏」？",
+            summary = "开启后，用眼到点时会在你正在使用的应用之上强制弹出全屏休息页，" +
+                "可能打断正在进行的操作（如看视频、开会、导航）。\n\n" +
+                "手机息屏或锁屏时不会弹出。",
+            onDismissRequest = { showFullScreenConfirm = false },
+        ) {
+            Button(
+                onClick = {
+                    showFullScreenConfirm = false
+                    update({ it.copy(autoFullScreen = true) }, "已开启「到点自动全屏」")
+                },
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.buttonColorsPrimary(),
+            ) { Text("确认开启", style = MiuixTheme.textStyles.button) }
+            Box(Modifier.padding(top = 8.dp)) {
+                TextButton(
+                    text = "取消",
+                    onClick = { showFullScreenConfirm = false },
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 20.dp,
+                    minHeight = 44.dp,
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                )
+            }
+        }
+    }
+}
+
+/** 设置页路由。[depth] 决定转场方向：变大往里推，变小往回退。 */
+internal sealed interface SettingsRoute {
+    val key: String
+
+    data object Home : SettingsRoute { override val key = "home" }
+    data object Timing : SettingsRoute { override val key = "timing" }
+    data object Reminder : SettingsRoute { override val key = "reminder" }
+    data object Sit : SettingsRoute { override val key = "sit" }
+    data object Appearance : SettingsRoute { override val key = "appearance" }
+    data object About : SettingsRoute { override val key = "about" }
+    data object References : SettingsRoute { override val key = "references" }
+
+    companion object {
+        fun fromKey(key: String): SettingsRoute = when (key) {
+            Home.key -> Home
+            Timing.key -> Timing
+            Reminder.key -> Reminder
+            Sit.key -> Sit
+            Appearance.key -> Appearance
+            About.key -> About
+            References.key -> References
+            else -> Home
+        }
+    }
+}
+
+/** 一级页的一行入口：标题 + 一句当前值 + 箭头。 */
+@Composable
+private fun SettingsEntry(
+    title: String,
+    summary: String,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    MiuixArrowPreference(
+        title = title,
+        summary = summary,
+        onClick = onClick,
+        endActions = if (trailing == null) {
+            {}
+        } else {
+            { trailing() }
+        },
+    )
+}
+
+/** 开关行：用 miuix 的 Switch，按下有缩放反馈。 */
+@Composable
+private fun SwitchRow(
+    title: String,
+    checked: Boolean,
+    onChecked: (Boolean) -> Unit,
+    subtitle: String? = null,
+) {
+    // 直接交给 miuix：行高、内距、开关动效、按下反馈、无障碍角色都由库统一，
+    // 之前手写的 Row + Switch 在副标题灰度和行高上都和 Preference 行对不齐。
+    SwitchPreference(
+        title = title,
+        summary = subtitle,
+        checked = checked,
+        onCheckedChange = onChecked,
+    )
+}
+
+@Composable
+private fun IntWheelRow(
+    title: String,
+    value: Int,
+    range: IntRange,
+    unit: String,
+    onChange: (Int) -> Unit,
+    subtitle: String? = null,
+) {
+    var open by remember { mutableStateOf(false) }
+    MiuixArrowPreference(
+        title = title,
+        summary = subtitle ?: "$value $unit",
+        onClick = { open = true },
+    )
+    if (open) {
+        IntWheelSheet(
+            title = title,
+            initial = value,
+            range = range,
+            unit = unit,
+            onDismiss = { open = false },
+            onConfirm = {
+                open = false
+                // 只在「确定」时落盘：updateSettings 会重排闹钟，
+                // 每滚一格就提交会让手指一慢就卡。
+                if (it != value) onChange(it)
+            },
+        )
+    }
+}
+
+/** 单列数字滚轮：用 miuix 的 NumberPicker，与免打扰时间选择同一套交互。 */
+@Composable
+private fun IntWheelSheet(
+    title: String,
+    initial: Int,
+    range: IntRange,
+    unit: String,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    var draft by remember { mutableIntStateOf(initial.coerceIn(range.first, range.last)) }
+    OverlayBottomSheet(
+        show = true,
+        title = title,
+        onDismissRequest = onDismiss,
+    ) {
+        // 单位写进 label，和数字一起居中滚动。
+        //
+        // 之前是「NumberPicker + Row 里的 Text」：NumberPicker 内部写死
+        // fillMaxWidth()，会把整个宽度吃掉，单位被推到最右边、还被压成竖排。
+        NumberPicker(
+            value = draft,
+            onValueChange = { draft = it },
+            range = range,
+            label = { "$it $unit" },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TextButton(
+                text = "取消",
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.textButtonColors(),
+            )
+            Button(
+                onClick = { onConfirm(draft) },
+                modifier = Modifier.weight(1f),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.buttonColorsPrimary(),
+            ) { Text("确定", style = MiuixTheme.textStyles.button) }
+        }
+    }
+}
+
+/**
+ * 双栏滚轮（小时 + 分钟），用于跨度大的设置。
+ *
+ * 两个 NumberPicker 各占一半宽度（都内部 fillMaxWidth，用 weight 分配），
+ * 中间用冒号分隔；单位不写在数字后面，避免「120 分钟」这种长串把栏撑开。
+ *
+ * [hourRange] 决定小时可选范围；当小时为 0 时分钟从 [minMinuteAtZeroHour] 起，
+ * 防止选出「0 小时 0 分钟」这种无效组合（确定按钮会变成死键）。
+ */
+@Composable
+private fun DualWheelSheet(
+    title: String,
+    initialMinutes: Int,
+    hourRange: IntRange,
+    minMinuteAtZeroHour: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    var hour by remember {
+        mutableIntStateOf((initialMinutes / 60).coerceIn(hourRange.first, hourRange.last))
+    }
+    var minute by remember {
+        mutableIntStateOf((initialMinutes % 60).coerceIn(minMinuteAtZeroHour, 59))
+    }
+    // 小时切到 0 时，把分钟抬到允许的最小值，避免停在无效区间
+    val minuteRange = if (hour == 0 && hourRange.first == 0) minMinuteAtZeroHour..59 else 0..59
+    if (minute !in minuteRange) minute = minuteRange.first
+
+    OverlayBottomSheet(
+        show = true,
+        title = title,
+        onDismissRequest = onDismiss,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NumberPicker(
+                value = hour,
+                onValueChange = { hour = it },
+                range = hourRange,
+                label = { "$it 时" },
+                modifier = Modifier.weight(1f),
+            )
+            NumberPicker(
+                value = minute,
+                onValueChange = { minute = it },
+                range = minuteRange,
+                label = { "$it 分" },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TextButton(
+                text = "取消",
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.textButtonColors(),
+            )
+            Button(
+                onClick = { onConfirm(hour * 60 + minute) },
+                modifier = Modifier.weight(1f),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.buttonColorsPrimary(),
+            ) { Text("确定", style = MiuixTheme.textStyles.button) }
+        }
+    }
+}
+
+/**
+ * 久坐提醒间隔：滚轮，但只在 30/45/60 三档之间滚动。
+ *
+ * 为什么不用 IntWheelRow：那会允许 31、47 这类值，
+ * 而这一项的产品定义就是三档（[AppSettings.SIT_INTERVAL_CHOICES]）。
+ */
+@Composable
+private fun SitIntervalWheel(current: Int, onPick: (Int) -> Unit) {
+    val choices = AppSettings.SIT_INTERVAL_CHOICES
+    val index = choices.indexOf(current).coerceAtLeast(0)
+    NumberPicker(
+        value = index,
+        onValueChange = { i -> choices.getOrNull(i)?.let(onPick) },
+        range = choices.indices,
+        label = { i -> "${choices.getOrElse(i) { choices.first() }} 分钟" },
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** 大跨度设置用的行：点开双栏滚轮，摘要显示「X 小时 Y 分钟」。 */
+@Composable
+private fun DualWheelRow(
+    title: String,
+    valueMinutes: Int,
+    hourRange: IntRange,
+    minMinuteAtZeroHour: Int,
+    unit: String,
+    onChange: (Int) -> Unit,
+    subtitle: String? = null,
+) {
+    var open by remember { mutableStateOf(false) }
+    MiuixArrowPreference(
+        title = title,
+        summary = subtitle ?: formatHm(valueMinutes, unit),
+        onClick = { open = true },
+    )
+    if (open) {
+        DualWheelSheet(
+            title = title,
+            initialMinutes = valueMinutes,
+            hourRange = hourRange,
+            minMinuteAtZeroHour = minMinuteAtZeroHour,
+            onDismiss = { open = false },
+            onConfirm = {
+                open = false
+                if (it != valueMinutes) onChange(it)
+            },
+        )
+    }
+}
+
+/** 摘要文案：整小时省掉「0 分」，不足 1 小时只写分钟。 */
+private fun formatHm(totalMinutes: Int, unit: String): String {
+    if (unit != "分钟") return "$totalMinutes $unit"
+    val h = totalMinutes / 60
+    val m = totalMinutes % 60
+    return when {
+        h == 0 -> "$m 分钟"
+        m == 0 -> "$h 小时"
+        else -> "$h 小时 $m 分钟"
+    }
+}
+
+/** 免打扰时间行：点击弹底部滚轮。 */
+@Composable
+private fun TimeRow(title: String, minuteOfDay: Int, onPick: (Int) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    MiuixArrowPreference(
+        title = title,
+        summary = AppSettings.formatMinuteOfDay(minuteOfDay),
+        onClick = { open = true },
+    )
+    if (open) {
+        TimePickerSheet(
+            initial = minuteOfDay,
+            onDismiss = { open = false },
+            onConfirm = {
+                open = false
+                onPick(it)
+            },
+        )
+    }
+}
+
+/**
+ * 时间选择底部弹层：两列滚轮（小时 / 分钟）。
+ *
+ * 为什么不用系统 TimePickerDialog：它是 Material 的对话框，方角、系统蓝、
+ * 还会在浅色主题上盖一层灰 —— 和整套界面不是一回事。
+ */
+@Composable
+private fun TimePickerSheet(initial: Int, onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
+    var hour by remember { mutableStateOf(initial / 60) }
+    var minute by remember { mutableStateOf(initial % 60) }
+    OverlayBottomSheet(
+        show = true,
+        title = "选择时间",
+        onDismissRequest = onDismiss,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NumberPicker(
+                value = hour,
+                onValueChange = { hour = it },
+                range = 0..23,
+                label = { "%02d".format(it) },
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = ":",
+                style = MiuixTheme.textStyles.title2,
+                color = MiuixTheme.colorScheme.onSurface,
+            )
+            NumberPicker(
+                value = minute,
+                onValueChange = { minute = it },
+                range = 0..59,
+                label = { "%02d".format(it) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+            TextButton(
+                text = "取消",
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.textButtonColorsPrimary(),
+            )
+            Button(
+                onClick = { onConfirm(hour * 60 + minute) },
+                modifier = Modifier.weight(1f),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.buttonColorsPrimary(),
+            ) { Text("确定", style = MiuixTheme.textStyles.button) }
+        }
+    }
+}
+
+/** 提示音音源：一行入口 + 底部弹层单选 + 试听。 */
+@Composable
+private fun SoundSourceRow(current: RestSoundSource, onSelect: (RestSoundSource) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    MiuixArrowPreference(
+        title = "提示音音源",
+        summary = current.label,
+        onClick = { open = true },
+    )
+    if (open) {
+        OverlayBottomSheet(
+            show = true,
+            title = "提示音音源",
+            onDismissRequest = {
+                RestSoundPlayer.stop()
+                open = false
+            },
+        ) {
+            RestSoundSource.entries.forEach { source ->
+                RadioButtonPreference(
+                    title = source.label,
+                    selected = source == current,
+                    onClick = {
+                        onSelect(source)
+                        // 选完立刻试听：比写「单声/清亮」这种文字描述准得多
+                        RestSoundPlayer.play(context, source)
+                        open = false
+                    },
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            TextButton(
+                text = "试听当前",
+                onClick = { RestSoundPlayer.play(context, current) },
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.textButtonColorsPrimary(),
+            )
+        }
+    }
+}
+
+/**
+ * 设置 tab 的导航壳（v3.5）。
+ *
+ * ## 为什么用 miuix 的 NavDisplay
+ *
+ * 之前的二级页转场是自写 `AnimatedContent`（1/4 屏、200ms、自定曲线），
+ * 和 miuix 的导航规范差一截。现在交给 `miuix-navigation3-ui` 的 `NavDisplay`：
+ * 默认推入是 **500ms 整屏位移 + NavTransitionEasing(0.8, 0.95)**，
+ * 预测性返回是库自己实现的纯位移 —— 不需要我们再手写 progress。
+ *
+ * ## 为什么离开 tab 要清栈
+ *
+ * 三个 tab 在 Pager 里常驻组合，NavDisplay 的返回处理也会一直注册。
+ * 如果带着二级页切到计时 tab，按返回会把"看不见的设置页"弹掉一层。
+ * 所以离开设置 tab 时把栈收回首页；代价是切回来不再停在原二级页，
+ * 但这比"吞掉一次返回"可预期。
+ */
+@Composable
+internal fun SettingsScreen(
+    viewModel: EyeCareViewModel,
+    context: Context,
+    snackbarHostState: SnackbarHostState,
+    isActive: Boolean,
+    openTimingSignal: Int = 0,
+) {
+    val stack = rememberSaveable(
+        saver = listSaver<SnapshotStateList<SettingsRoute>, String>(
+            save = { list -> list.map { it.key } },
+            restore = { keys ->
+                mutableStateListOf(*keys.map(SettingsRoute::fromKey).toTypedArray())
+            },
+        ),
+    ) { mutableStateListOf<SettingsRoute>(SettingsRoute.Home) }
+
+    LaunchedEffect(isActive) {
+        if (!isActive) {
+            while (stack.size > 1) stack.removeAt(stack.lastIndex)
+        }
+    }
+
+    // 计时页的参数瓦片 → 打开「计时参数」。
+    // 只认变化量：signal 为 0 是初始值，不该在首次进入设置时硬跳二级页。
+    LaunchedEffect(openTimingSignal, isActive) {
+        if (isActive && openTimingSignal > 0 && stack.last() != SettingsRoute.Timing) {
+            stack.add(SettingsRoute.Timing)
+        }
+    }
+
+    val provider = entryProvider<SettingsRoute> {
+        entry<SettingsRoute.Home> {
+            SettingsRouteContent(
+                route = SettingsRoute.Home,
+                viewModel = viewModel,
+                context = context,
+                snackbarHostState = snackbarHostState,
+                onOpen = { stack.add(it) },
+                onBack = {},
+            )
+        }
+        entry<SettingsRoute.Timing> {
+            SettingsRouteContent(
+                route = SettingsRoute.Timing,
+                viewModel = viewModel,
+                context = context,
+                snackbarHostState = snackbarHostState,
+                onOpen = {},
+                onBack = { popSettings(stack) },
+            )
+        }
+        entry<SettingsRoute.Reminder> {
+            SettingsRouteContent(
+                route = SettingsRoute.Reminder,
+                viewModel = viewModel,
+                context = context,
+                snackbarHostState = snackbarHostState,
+                onOpen = {},
+                onBack = { popSettings(stack) },
+            )
+        }
+        entry<SettingsRoute.Sit> {
+            SettingsRouteContent(
+                route = SettingsRoute.Sit,
+                viewModel = viewModel,
+                context = context,
+                snackbarHostState = snackbarHostState,
+                onOpen = {},
+                onBack = { popSettings(stack) },
+            )
+        }
+        entry<SettingsRoute.Appearance> {
+            SettingsRouteContent(
+                route = SettingsRoute.Appearance,
+                viewModel = viewModel,
+                context = context,
+                snackbarHostState = snackbarHostState,
+                onOpen = {},
+                onBack = { popSettings(stack) },
+            )
+        }
+        entry<SettingsRoute.References> {
+            SettingsRouteContent(
+                route = SettingsRoute.References,
+                viewModel = viewModel,
+                context = context,
+                snackbarHostState = snackbarHostState,
+                onOpen = {},
+                onBack = { popSettings(stack) },
+            )
+        }
+        entry<SettingsRoute.About> {
+            SettingsRouteContent(
+                route = SettingsRoute.About,
+                viewModel = viewModel,
+                context = context,
+                snackbarHostState = snackbarHostState,
+                // 关于页要能继续往里推「参考与致谢」；之前这里是空 lambda，
+                // 所以点那一行没有任何反应 —— 这就是"打不开"的原因。
+                onOpen = { stack.add(it) },
+                onBack = { popSettings(stack) },
+            )
+        }
+    }
+
+    val entries = rememberDecoratedNavEntries(stack, entryProvider = provider)
+    NavDisplay(
+        entries = entries,
+        // 与 HuaweiPods 对齐：dimAmount 用 miuix 的默认值 0.5。
+        //
+        // 这个值做的事，是在转场时给底下那页盖一层黑色 Box，alpha 随进度升到 0.5。
+        // 明暗交界正好落在滑入页面的左边缘，观感就是"新页面在旧页面上投了阴影"，
+        // 而不是平面地滑过去 —— 这是层级感的来源。
+        //
+        // 注意：0.5 曾经被反馈成"黑闪"，那是因为当时页面根节点还是透明的，
+        // 遮罩连整屏 app 底色一起压暗。现在页面自带不透明底板（见 HyperPage），
+        // 被压暗的只有滑出的旧页面，与参考项目的表现一致。
+        // 如果以后又觉得闪，只调这一个数字，别动别的。
+        transitionEffects = NavDisplayTransitionEffects(
+            enableCornerClip = true,
+            dimAmount = 0.5f,
+            blockInputDuringTransition = true,
+        ),
+        onBack = { popSettings(stack) },
+    )
+}
+
+private fun popSettings(stack: MutableList<SettingsRoute>) {
+    if (stack.size > 1) stack.removeAt(stack.lastIndex)
+}

@@ -71,3 +71,81 @@
 以下尚未经用户确认，暂不写入规则：
 
 - 休息全屏页顶部的大号 emoji（🌄）是否也按「装饰」处理删掉。
+
+---
+
+## 整体重做：HyperOS 4 / HyperLight 方向（2026-11-20）
+
+用户明确要求：**不要把旧 UI 当基础做局部优化，整套界面推倒重做**，
+目标是"看起来像 HyperOS 4 生态里的系统工具"。据此定下的硬规则：
+
+1. **页面结构 = 系统设置型**：一级页只放入口（大标题 + 分组行），
+   参数进二级页；二级页是紧凑标题栏 + 返回，不再各自设计一套头部。
+2. **计时页以"剩余时间"为主读数**，进度用细横条；圆环只允许作为辅助表达，
+   不允许占据整页视觉中心（用户看的是"还剩多久"，不是"占比多少"）。
+3. **控件优先用 miuix 真实组件**（TopAppBar / TabRow / Switch / Slider /
+   NumberPicker / OverlayDialog / OverlayBottomSheet / Preference 行），
+   不再用 Material 组件冒充，也不自己拼"看着像"的控件。
+4. **材质只分两层**：页面级柔光底（radial 光斑 + API 31+ 真实模糊）与
+   分组卡面（半透明 + 1dp 淡描边）；弹层用不透明卡面保证可读。
+   禁止"所有区域同一套玻璃"。
+5. **动效只有两条弹簧 + 四个时长**，定义在 `ui/design/HyperTokens.kt`；
+   新增动画必须从这里取，不许各处自调 damping。
+6. **图标只用 miuix-icons 一套**（`MiuixIcons`），文字与按钮里不用 emoji。
+7. **业务逻辑一行不改**：计时/统计/权限/通知的行为与数据结构保持原样，
+   UI 重做只允许改"怎么显示、怎么进入"。
+8. **没有的能力不造**：仓库里没有"显示参数 / 护眼模式调节"这类功能，
+   界面就不能出现对应页面或开关。
+
+### 计时页的"开始/暂停"是什么
+
+这个 App 的用眼时长由系统亮屏事件驱动，**没有手动开始计时这件事**。
+所以计时页的主按钮是「现在休息」（手动提前休息），
+"暂停/继续"对应的是「护眼提醒」总开关，不是计时器的启停。
+不得为了凑"开始/暂停/继续"三态而虚构计时器手动控制。
+
+### 参考项目（2026-11-20 补充）
+
+- **Nshpiter/HuaweiPods**：界面与动效参考。可借鉴的是「悬浮底栏 + 内容从底下穿过」、
+  「参数用独立小瓦片而不是塞进一张卡」、「按压下沉反馈」、「滚动距离越远切页越快」。
+  它的 `Os3BackgroundEffect` 是全屏 AGSL 着色器，低端机代价明显，本 App 不采用。
+- **1812z/HyperIsland**：关于页参考。可借鉴的是「居中头图 → 分组列表」的结构、
+  头图随滚动淡出、分组小标题 + 卡片的节奏。它的 `miuix.blur` 依赖声明 **minSdk 33**。
+  2026-11-21 用户决定把项目 minSdk 从 24 抬到 33，换取**真实背景模糊**
+  （顶栏渐进模糊 + 悬浮底栏玻璃），代价是放弃 Android 7–12；README 的支持版本
+  徽章已同步改为 Android 13+。仍然**禁止** `tools:overrideLibrary`：
+  库的清单要求 33 是有原因的，强装会在 RenderEffect 类加载处崩溃。
+
+  真实模糊的使用约束：玻璃面必须与被采样的 `layerBackdrop` 是**兄弟节点**，
+  不能位于录制子树内部（会形成采样环）。顶栏采样本页滚动内容，底栏采样整块页面
+  （柔光底 + 分页内容），两者都不与自己的采样源重叠。
+
+
+---
+
+## miuix 组件优先（2026-11-21，可核对）
+
+用户明确要求：**miuix 有对应组件的，不允许照着样子手写。** 手写版看着像，
+但行高、按下反馈、副标题灰度、无障碍语义都会和库内控件漂移。
+
+已迁移（原手写 → miuix）：
+
+| 原实现 | 现实现 |
+|---|---|
+| 设置页 `SwitchRow` 里的 Row + Switch | `SwitchPreference` |
+| 设置页 `IntSliderRow` 的标题 + Slider | `SliderPreference` |
+| 计时/目标进度条（两个 Box） | `LinearProgressIndicator` |
+| `HyperSection` 的 squircle 半透明容器 | `Card`（默认 16dp、surfaceContainer） |
+| 久坐间隔的三连按钮 | `TabRow` |
+
+保留自绘（miuix 确实没有）：二级页转场、柱状图、空态、关于页头图、柔光背景。
+
+**交差前跑这条核对**（每条都应 ≥1）：
+
+```bash
+grep -c "SwitchPreference" app/src/main/java/com/java/myapplication/ui/pages/SettingsPage.kt
+grep -c "SliderPreference" app/src/main/java/com/java/myapplication/ui/pages/SettingsPage.kt
+grep -c "LinearProgressIndicator" app/src/main/java/com/java/myapplication/ui/pages/TimerPage.kt
+grep -c "LinearProgressIndicator" app/src/main/java/com/java/myapplication/ui/pages/RestPage.kt
+grep -c "miuix.kmp.basic.Card" app/src/main/java/com/java/myapplication/ui/design/HyperSurface.kt
+```

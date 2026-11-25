@@ -69,7 +69,14 @@ data class AppSettings(
     val returnToAppAfterRest: Boolean = true,
 
     // ============ 外观 ============
-    val autoNightMode: Boolean = true   // 自动随系统切换夜间模式
+    /** 主题模式（v3.4）：跟随系统 / 浅色 / 深色 */
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+
+    /** 底栏是否悬浮在内容之上（v3.4） */
+    val floatingBottomBar: Boolean = true,
+
+    /** 底栏是否使用真实背景模糊（v3.4）；关闭后改用不透明底色 */
+    val blurBottomBar: Boolean = true,
 ) {
     companion object {
         /** 久坐间隔可选值，设置页用 */
@@ -126,7 +133,11 @@ object SettingsStore {
     private const val PREFS = "eye_care_settings"
     private const val KEY_WORK = "work_minutes"
     private const val KEY_REST = "rest_seconds"
+    /** 旧版开关，仅用于迁移：false 代表当时的「强制浅色」 */
     private const val KEY_AUTO_NIGHT = "auto_night_mode"
+    private const val KEY_THEME_MODE = "theme_mode"
+    private const val KEY_FLOATING_BAR = "floating_bottom_bar"
+    private const val KEY_BLUR_BAR = "blur_bottom_bar"
     // v2.3 新增
     private const val KEY_DAILY_GOAL = "daily_goal_minutes"
     private const val KEY_AUTO_FULL_SCREEN = "auto_full_screen"
@@ -169,7 +180,17 @@ object SettingsStore {
             restEndSoundVibrate = p.getBoolean(KEY_REST_END_SOUND_VIBRATE, d.restEndSoundVibrate),
             restEndSoundSource = RestSoundSource.fromKey(p.getString(KEY_REST_END_SOUND_SOURCE, null)),
             returnToAppAfterRest = p.getBoolean(KEY_RETURN_TO_APP, d.returnToAppAfterRest),
-            autoNightMode = p.getBoolean(KEY_AUTO_NIGHT, d.autoNightMode)
+            // 迁移：老版本只有 auto_night_mode；false 等于「始终浅色」。
+            // 读过一次后写入 theme_mode，之后以 theme_mode 为准。
+            themeMode = p.getString(KEY_THEME_MODE, null)
+                ?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } }
+                ?: if (p.contains(KEY_AUTO_NIGHT) && !p.getBoolean(KEY_AUTO_NIGHT, true)) {
+                    ThemeMode.LIGHT
+                } else {
+                    ThemeMode.SYSTEM
+                },
+            floatingBottomBar = p.getBoolean(KEY_FLOATING_BAR, d.floatingBottomBar),
+            blurBottomBar = p.getBoolean(KEY_BLUR_BAR, d.blurBottomBar)
         )
     }
 
@@ -189,7 +210,11 @@ object SettingsStore {
             .putBoolean(KEY_REST_END_SOUND_VIBRATE, settings.restEndSoundVibrate)
             .putString(KEY_REST_END_SOUND_SOURCE, settings.restEndSoundSource.name)
             .putBoolean(KEY_RETURN_TO_APP, settings.returnToAppAfterRest)
-            .putBoolean(KEY_AUTO_NIGHT, settings.autoNightMode)
+            .putString(KEY_THEME_MODE, settings.themeMode.name)
+            // 兼容降级：老版本只认这个布尔值，跟着写一份，避免回退后界面错乱
+            .putBoolean(KEY_AUTO_NIGHT, settings.themeMode != ThemeMode.LIGHT)
+            .putBoolean(KEY_FLOATING_BAR, settings.floatingBottomBar)
+            .putBoolean(KEY_BLUR_BAR, settings.blurBottomBar)
             .apply()
     }
 }

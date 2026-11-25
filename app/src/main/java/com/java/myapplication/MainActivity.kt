@@ -14,7 +14,7 @@ import androidx.compose.runtime.getValue
 import com.java.myapplication.notify.RestNotifier
 import com.java.myapplication.ui.EyeCareApp
 import com.java.myapplication.ui.EyeCareViewModel
-import com.java.myapplication.ui.theme.MyApplicationTheme
+import com.java.myapplication.ui.theme.EyeCareMiuixTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -38,11 +38,11 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             // 自动夜间模式开关由 ViewModel 实时推送，拨动后无需重启应用即可生效
-            val autoNight by viewModel.autoNightModeState
+            val themeMode by viewModel.themeModeState
             // App 实际是否走深色：系统深色 **且** 开了自动夜间模式。
             // 状态栏/导航栏图标的明暗必须跟这个值走 —— 只跟系统的话，
             // 用户在系统深色下关掉自动夜间模式会得到「浅底白图标」看不见。
-            val dark = autoNight && isSystemInDarkTheme()
+            val dark = themeMode.isDark(isSystemInDarkTheme())
             LaunchedEffect(dark) {
                 enableEdgeToEdge(
                     statusBarStyle = if (dark) {
@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
                     }
                 )
             }
-            MyApplicationTheme(autoNight = autoNight) {
+            EyeCareMiuixTheme(themeMode = themeMode) {
                 EyeCareApp()
             }
         }

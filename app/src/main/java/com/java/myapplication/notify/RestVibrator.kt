@@ -7,6 +7,7 @@ import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import androidx.annotation.RequiresApi
 
 /**
  * 休息结束的短振动。
@@ -65,6 +66,7 @@ object RestVibrator {
      * 按系统版本选择带「通知」用途的振动重载。
      * @return true 表示重载调用未抛异常（不代表系统一定真的振了，仅用于决定是否兜底）
      */
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun vibrateWithUsage(vibrator: Vibrator, effect: VibrationEffect): Boolean {
         return try {
             when {
@@ -89,6 +91,7 @@ object RestVibrator {
     }
 
     /** 最后兜底：不带任何用途的原始振动重载（默认触摸用途） */
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun vibrateDefault(vibrator: Vibrator, effect: VibrationEffect) {
         try {
             vibrator.vibrate(effect)
