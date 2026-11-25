@@ -451,26 +451,44 @@ private fun TodaySection(
     }
     HyperSection(title = "今日") {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                // 「8 小时 9 分」比其他两列长一倍，等宽会把数字挤在一起；
-                // 第一列多给权重，并在超宽时自动降字号。
-                StatTile(
-                    value = formatHoursMinutes(screenOnSeconds.toInt()),
-                    label = "亮屏",
-                    modifier = Modifier.weight(1.5f),
-                )
-                StatTile(
-                    value = "${viewModel.todayCount}",
-                    label = "休息次数",
-                    modifier = Modifier.weight(1f),
-                )
-                StatTile(
-                    value = "${viewModel.todaySeconds / 60}",
-                    label = "休息分钟",
-                    modifier = Modifier.weight(1f),
+            // 亮屏时长独占一行（v3.9）。
+            //
+            // 三列等宽时「3 小时 49 分」约占一半宽度，右侧的「7」就贴在它后面，
+            // 读起来像「3 小时 49 分 7」；缩字号只能把字变小、挤的问题还在。
+            // 而亮屏本来就是这张卡的主指标，给它整行也符合信息层级。
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column {
+                    Text(
+                        text = formatHoursMinutes(screenOnSeconds.toInt()),
+                        style = MiuixTheme.textStyles.title2,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = "亮屏",
+                        style = MiuixTheme.textStyles.footnote2,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+                Text(
+                    text = "${(screenOnSeconds / 60)} / $goalMinutes 分钟",
+                    style = MiuixTheme.textStyles.footnote2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    maxLines = 1,
                 )
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
+            // 休息两项合成一行次级文字，避免它们与主指标抢注意力
+            Text(
+                text = "休息 ${viewModel.todayCount} 次 · 共 ${viewModel.todaySeconds / 60} 分钟",
+                style = MiuixTheme.textStyles.footnote1,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+            Spacer(Modifier.height(10.dp))
             GoalBar(
                 usedMinutes = (screenOnSeconds / 60).toInt(),
                 goalMinutes = goalMinutes,
@@ -490,19 +508,11 @@ private fun GoalBar(usedMinutes: Int, goalMinutes: Int) {
         label = "goal-color",
     )
     Column {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = if (over) "已超出每日目标" else "每日目标",
-                style = MiuixTheme.textStyles.footnote2,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = "$usedMinutes / $goalMinutes 分钟",
-                style = MiuixTheme.textStyles.footnote2,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-        }
+        Text(
+            text = if (over) "已超出每日目标" else "每日目标",
+            style = MiuixTheme.textStyles.footnote2,
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        )
         Spacer(Modifier.height(6.dp))
         LinearProgressIndicator(
             progress = animated,
@@ -515,23 +525,6 @@ private fun GoalBar(usedMinutes: Int, goalMinutes: Int) {
     }
 }
 
-@Composable
-private fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.Start) {
-        Text(
-            text = value,
-            style = MiuixTheme.textStyles.title2,
-            color = MiuixTheme.colorScheme.onSurface,
-            maxLines = 1,
-            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(14.sp, 26.sp),
-        )
-        Text(
-            text = label,
-            style = MiuixTheme.textStyles.footnote2,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-        )
-    }
-}
 
 /** 亮屏时长按「X 小时 Y 分」显示；不足一小时只显示分钟，避免出现「0 小时」。 */
 internal fun formatHoursMinutes(totalSeconds: Int): String {

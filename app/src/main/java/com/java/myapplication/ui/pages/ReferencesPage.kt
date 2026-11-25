@@ -119,7 +119,7 @@ fun ReferencesPage(onBack: () -> Unit) {
             insideMargin = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
         ) {
             Text(
-                text = "完整清单（上游提交、修改范围、核查方法）见仓库根目录 THIRD_PARTY_NOTICES.md。",
+                text = "各项目的许可证全文见下方；版权归各自作者所有。",
                 style = MiuixTheme.textStyles.footnote2,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
@@ -167,14 +167,17 @@ private val dependencyReferences = listOf(
 )
 
 private val designReferences = listOf(
+    // 只说明"参考了它的什么方向"，不复述代码位置：
+    // 这一页是给用户看的致谢，不是给开发者的合规台账；
+    // 详细的文件级信息留在仓库的 THIRD_PARTY_NOTICES.md。
     Reference(
         name = "HuaweiPods",
-        summary = "界面与动效参考；切页时长算式改写自其 MainTabsPagerState · GPL-3.0",
+        summary = "界面结构与动效节奏参考",
         url = "https://github.com/Nshpiter/HuaweiPods",
     ),
     Reference(
         name = "HyperIsland",
-        summary = "关于页版式参考，未包含其代码 · MIT",
+        summary = "关于页版式参考",
         url = "https://github.com/1812z/HyperIsland",
     ),
 )

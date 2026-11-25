@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +33,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.mutableIntStateOf
 import com.java.myapplication.data.AppInfo
 import com.java.myapplication.data.AppSettings
 import com.java.myapplication.data.ThemeMode
@@ -61,7 +63,6 @@ import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.ArrowPreference as MiuixArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
-import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -176,7 +177,7 @@ internal fun SettingsRouteContent(
         SettingsRoute.Timing -> SubPage("计时参数", onBack = onBack) {
             Spacer(Modifier.height(HyperSpace.Tight))
             HyperSection(title = "节奏") {
-                IntSliderRow(
+                IntWheelRow(
                     title = "用眼提醒间隔",
                     value = s.workMinutes,
                     range = 1..120,
@@ -184,7 +185,7 @@ internal fun SettingsRouteContent(
                     onChange = { v -> update({ it.copy(workMinutes = v) }, "用眼提醒间隔：$v 分钟", settled = true) },
                 )
                 HyperDivider(startInset = 16.dp)
-                IntSliderRow(
+                IntWheelRow(
                     title = "休息时长",
                     value = s.restSeconds,
                     range = 5..300,
@@ -194,7 +195,7 @@ internal fun SettingsRouteContent(
             }
             Spacer(Modifier.height(HyperSpace.Section))
             HyperSection(title = "目标") {
-                IntSliderRow(
+                IntWheelRow(
                     title = "每日用眼目标",
                     value = s.dailyGoalMinutes,
                     range = 10..480,
@@ -217,7 +218,7 @@ internal fun SettingsRouteContent(
                     },
                 )
                 HyperDivider(startInset = 16.dp)
-                IntSliderRow(
+                IntWheelRow(
                     title = "超时二次提醒",
                     subtitle = "到点后仍不休息，每隔这么久再提醒一次",
                     value = s.overdueRemindMinutes,
@@ -498,7 +499,7 @@ private fun SwitchRow(
 }
 
 @Composable
-private fun IntSliderRow(
+private fun IntWheelRow(
     title: String,
     value: Int,
     range: IntRange,
@@ -506,22 +507,82 @@ private fun IntSliderRow(
     onChange: (Int) -> Unit,
     subtitle: String? = null,
 ) {
-    // 拖动只改本地值，松手才落盘：onChange 会重排闹钟，不能每帧提交。
-    // valueText 由本地值渲染，所以拖动时数字跟手，但配置只在松手时保存一次。
-    var draft by remember(value) { mutableFloatStateOf(value.toFloat()) }
-    SliderPreference(
-        value = draft,
-        onValueChange = { draft = it.coerceIn(range.first.toFloat(), range.last.toFloat()) },
-        onValueChangeFinished = {
-            val v = draft.toInt().coerceIn(range.first, range.last)
-            if (v != value) onChange(v)
-        },
+    var open by remember { mutableStateOf(false) }
+    MiuixArrowPreference(
         title = title,
-        summary = subtitle,
-        valueText = "${draft.toInt()} $unit",
-        valueRange = range.first.toFloat()..range.last.toFloat(),
-        showKeyPoints = false,
+        summary = subtitle ?: "$value $unit",
+        onClick = { open = true },
     )
+    if (open) {
+        IntWheelSheet(
+            title = title,
+            initial = value,
+            range = range,
+            unit = unit,
+            onDismiss = { open = false },
+            onConfirm = {
+                open = false
+                // 只在「确定」时落盘：updateSettings 会重排闹钟，
+                // 每滚一格就提交会让手指一慢就卡。
+                if (it != value) onChange(it)
+            },
+        )
+    }
+}
+
+/** 单列数字滚轮：用 miuix 的 NumberPicker，与免打扰时间选择同一套交互。 */
+@Composable
+private fun IntWheelSheet(
+    title: String,
+    initial: Int,
+    range: IntRange,
+    unit: String,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    var draft by remember { mutableIntStateOf(initial.coerceIn(range.first, range.last)) }
+    OverlayBottomSheet(
+        show = true,
+        title = title,
+        onDismissRequest = onDismiss,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NumberPicker(
+                value = draft,
+                onValueChange = { draft = it },
+                range = range,
+                label = { it.toString() },
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = unit,
+                style = MiuixTheme.textStyles.title4,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TextButton(
+                text = "取消",
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.textButtonColors(),
+            )
+            Button(
+                onClick = { onConfirm(draft) },
+                modifier = Modifier.weight(1f),
+                cornerRadius = 20.dp,
+                minHeight = 44.dp,
+                colors = ButtonDefaults.buttonColorsPrimary(),
+            ) { Text("确定", style = MiuixTheme.textStyles.button) }
+        }
+    }
 }
 
 /** 免打扰时间行：点击弹底部滚轮。 */
