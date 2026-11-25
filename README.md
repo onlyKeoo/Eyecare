@@ -26,6 +26,16 @@
 
 ---
 
+## 系统要求
+
+**Android 13（API 33）及以上。**
+
+v2.10.0 起不再支持 Android 7–12：界面层的真实背景模糊依赖 Android 12 才有的
+RenderEffect，而所用的 Miuix 模糊模块最低要求 API 33。旧版本（v2.9.0 及以前）
+仍支持 Android 7.0+，可在 [Releases](https://github.com/onlyKeoo/Eyecare/releases) 里找到。
+
+---
+
 ## 能做什么
 
 | 页面 | 作用 |
