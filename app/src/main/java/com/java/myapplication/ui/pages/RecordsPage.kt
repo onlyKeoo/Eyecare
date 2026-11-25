@@ -149,25 +149,32 @@ fun RecordsPage(viewModel: EyeCareViewModel, context: Context) {
             }
         } else {
             HyperSection(title = "今天") {
-                Row(
+                // 与计时页「今日」卡同一套版式：亮屏时长独占一行。
+                //
+                // 三列等宽时「7 小时 52 分」约占一半宽度，右侧的「13」直接贴上来，
+                // 读成「7 小时 52 分 13」；缩字号只是把字变小，挤的问题还在。
+                // 休息两项合成一行次级文字，不与主指标抢注意力。
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 16.dp),
                 ) {
-                    SummaryTile(
-                        value = formatHoursMinutes(screenOnSeconds.toInt()),
-                        label = "亮屏",
-                        modifier = Modifier.weight(1.4f),
+                    Text(
+                        text = formatHoursMinutes(screenOnSeconds.toInt()),
+                        style = MiuixTheme.textStyles.title2,
+                        color = MiuixTheme.colorScheme.onSurface,
+                        maxLines = 1,
                     )
-                    SummaryTile(
-                        value = "${viewModel.todayCount}",
-                        label = "休息次数",
-                        modifier = Modifier.weight(1f),
+                    Text(
+                        text = "亮屏",
+                        style = MiuixTheme.textStyles.footnote2,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
-                    SummaryTile(
-                        value = "${viewModel.todaySeconds / 60}",
-                        label = "休息分钟",
-                        modifier = Modifier.weight(1f),
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = "休息 ${viewModel.todayCount} 次 · 共 ${viewModel.todaySeconds / 60} 分钟",
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
             }
@@ -211,22 +218,6 @@ fun RecordsPage(viewModel: EyeCareViewModel, context: Context) {
     }
 }
 
-@Composable
-private fun SummaryTile(value: String, label: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        Text(
-            text = value,
-            style = MiuixTheme.textStyles.title2,
-            color = MiuixTheme.colorScheme.onSurface,
-            maxLines = 1,
-        )
-        Text(
-            text = label,
-            style = MiuixTheme.textStyles.footnote2,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-        )
-    }
-}
 
 private enum class AxisMode { HOURS, DAYS }
 
