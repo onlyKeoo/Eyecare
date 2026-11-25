@@ -6,7 +6,7 @@
 
 不联网 · 无广告 · 无账号 · 不收集任何数据
 
-[![Version](https://img.shields.io/badge/version-v2.9.0-2E7D32)](DEVELOPERS.md)
+[![Version](https://img.shields.io/badge/version-v2.10.0-2E7D32)](DEVELOPERS.md)
 [![Android](https://img.shields.io/badge/Android-13%2B-3DDC84?logo=android&logoColor=white)](#)
 [![许可证](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-GPL--3.0-2E7D32)](#许可证)
 

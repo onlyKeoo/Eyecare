@@ -24,12 +24,14 @@ android {
         // v2.7.2–v2.8.9 的改动从未单独出包，它们累积在这次发布里；
         // 版本号跳过 2.8.x 是因为那段序列已被内部注释占用，回填会造成混淆。
         //
-        // v2.10.0（ui-miuix 分支）：versionName 保持在 2.9.0 不动，
-        // 只把 versionCode 递增到 38 —— Android 不允许降级或同码覆盖安装，
-        // 试验包必须靠 versionCode 区分，但界面上不该显示成「新版本」。
-        // 合并回 main 正式发布时才一起改 versionName。
-        versionCode = 38
-        versionName = "2.9.0"
+        // v2.10.0：整套 UI 重做（HyperOS 风格）+ minSdk 抬到 33 + 主题体系重建。
+        //
+        // 为什么这次改 versionName 而不只是递增 versionCode：
+        // 2.9.0 已经对应一份已发布的源码，而 38 这个码先后给过 5 个实验包。
+        // 再挂同一个名字，就出现「一个版本号对应多份源码」——发布时无法溯源。
+        // 体量上也够一个次版本号：界面全部重写，不是修补。
+        versionCode = 39
+        versionName = "2.10.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
