@@ -222,7 +222,10 @@ fun RestPage(viewModel: EyeCareViewModel, context: Context) {
                             modifier = Modifier.fillMaxWidth(),
                             cornerRadius = 20.dp,
                             minHeight = 46.dp,
-                            colors = ButtonDefaults.textButtonColorsPrimary(),
+                            colors = ButtonDefaults.textButtonColors(
+                                color = MiuixTheme.colorScheme.secondaryContainer,
+                                textColor = MiuixTheme.colorScheme.primary,
+                            ),
                         )
                         Button(
                             onClick = { viewModel.skipRest(context) },
@@ -242,7 +245,10 @@ fun RestPage(viewModel: EyeCareViewModel, context: Context) {
                             modifier = Modifier.weight(1f),
                             cornerRadius = 20.dp,
                             minHeight = 46.dp,
-                            colors = ButtonDefaults.textButtonColorsPrimary(),
+                            colors = ButtonDefaults.textButtonColors(
+                                color = MiuixTheme.colorScheme.secondaryContainer,
+                                textColor = MiuixTheme.colorScheme.primary,
+                            ),
                         )
                         Button(
                             onClick = { viewModel.skipRest(context) },

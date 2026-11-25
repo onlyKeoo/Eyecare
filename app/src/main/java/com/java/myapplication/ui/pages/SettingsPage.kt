@@ -127,6 +127,9 @@ internal fun SettingsRouteContent(
     }
 
     val s = viewModel.settings
+    // 版本号走 PackageManager（IPC），只在首次组合查一次；
+    // 直接写在文案里会让每次重组都做一次跨进程查询。
+    val versionName = remember(context) { AppInfo.versionName(context) }
 
     when (route) {
         SettingsRoute.Home -> RootPage(title = "设置") {
@@ -159,10 +162,11 @@ internal fun SettingsRouteContent(
                     showDiagnostics = true
                 }
                 HyperDivider()
+                // 原来摘要写仓库地址、右侧再挂一个版本号，两个信息挤在
+                // 同一行右侧，v2.9.0 几乎贴住箭头。版本号并进摘要即可。
                 SettingsEntry(
                     "关于",
-                    AppInfo.REPO_URL_SHORT,
-                    trailing = { VersionBadge() },
+                    "v$versionName · 开源许可与仓库",
                 ) {
                     onOpen(SettingsRoute.About)
                 }
@@ -472,17 +476,6 @@ private fun SettingsEntry(
         } else {
             { trailing() }
         },
-    )
-}
-
-@Composable
-private fun VersionBadge() {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val name = remember(context) { AppInfo.versionName(context) }
-    Text(
-        text = "v$name",
-        style = MiuixTheme.textStyles.footnote2,
-        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
     )
 }
 

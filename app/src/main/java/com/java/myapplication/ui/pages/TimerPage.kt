@@ -382,13 +382,18 @@ private fun TimerActions(viewModel: EyeCareViewModel, context: Context) {
             }
             if (viewModel.phase == RestPhase.AWAITING) {
                 Spacer(Modifier.height(10.dp))
+                // 次要动作：浅灰底 + 主色文字。两个按钮都用实心蓝时，
+                // 用户看不出哪个是「现在休息」。
                 TextButton(
                     text = "稍后再说",
                     onClick = { viewModel.postponeRest(context) },
                     modifier = Modifier.fillMaxWidth(),
                     cornerRadius = 20.dp,
                     minHeight = 46.dp,
-                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                    colors = ButtonDefaults.textButtonColors(
+                                color = MiuixTheme.colorScheme.secondaryContainer,
+                                textColor = MiuixTheme.colorScheme.primary,
+                            ),
                 )
             }
         }
@@ -447,10 +452,12 @@ private fun TodaySection(
     HyperSection(title = "今日") {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
             Row(modifier = Modifier.fillMaxWidth()) {
+                // 「8 小时 9 分」比其他两列长一倍，等宽会把数字挤在一起；
+                // 第一列多给权重，并在超宽时自动降字号。
                 StatTile(
                     value = formatHoursMinutes(screenOnSeconds.toInt()),
                     label = "亮屏",
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1.5f),
                 )
                 StatTile(
                     value = "${viewModel.todayCount}",
@@ -516,6 +523,7 @@ private fun StatTile(value: String, label: String, modifier: Modifier = Modifier
             style = MiuixTheme.textStyles.title2,
             color = MiuixTheme.colorScheme.onSurface,
             maxLines = 1,
+            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(14.sp, 26.sp),
         )
         Text(
             text = label,

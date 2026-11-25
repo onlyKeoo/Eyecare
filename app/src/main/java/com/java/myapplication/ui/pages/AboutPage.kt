@@ -2,12 +2,6 @@ package com.java.myapplication.ui.pages
 
 import android.content.Context
 import android.content.Intent
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +33,6 @@ import com.java.myapplication.ui.design.HyperDivider
 import com.java.myapplication.ui.design.HyperSection
 import com.java.myapplication.ui.design.HyperSpace
 import com.java.myapplication.ui.theme.LocalEyeCareDark
-import com.java.myapplication.ui.theme.rememberReducedMotion
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -121,24 +114,14 @@ fun AboutPage(context: Context, onOpenLicense: () -> Unit) {
  */
 @Composable
 private fun AboutHero(versionName: String) {
-    val reduceMotion = rememberReducedMotion()
     val dark = LocalEyeCareDark.current
     val base = MiuixTheme.colorScheme.primary
     val accent = MiuixTheme.colorScheme.secondary
 
-    val phase by if (reduceMotion) {
-        remember { androidx.compose.runtime.mutableFloatStateOf(0.25f) }
-    } else {
-        rememberInfiniteTransition(label = "about-aurora").animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(12_000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-            label = "about-phase",
-        )
-    }
+    // 之前是 12 秒一圈的 rememberInfiniteTransition：装饰用的渐变会让
+    // 整个关于页持续重绘（低端机耗电、掉帧），而它不承载任何信息。
+    // 现在固定一个相位，只在进入时画一次。
+    val phase = 0.25f
 
     Column(
         modifier = Modifier.fillMaxWidth(),

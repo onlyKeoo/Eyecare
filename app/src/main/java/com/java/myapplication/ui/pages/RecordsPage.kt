@@ -199,7 +199,9 @@ fun RecordsPage(viewModel: EyeCareViewModel, context: Context) {
             HyperSection(title = "每日休息") {
                 BarChart(
                     data = restData,
-                    barColor = MiuixTheme.colorScheme.secondary,
+                    // secondary 在 miuix 里是 #E6E6E6（浅灰底），画柱子几乎看不见。
+                    // 用主色的浅版：两张图同色系、靠深浅区分，白底/黑底都读得出。
+                    barColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.45f),
                     unit = "分钟",
                     axisMode = AxisMode.DAYS,
                     highlightLast = true,
